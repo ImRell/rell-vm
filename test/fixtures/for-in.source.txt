@@ -1,0 +1,23 @@
+var prototype = { inherited: 7 };
+var object = { __proto__: prototype, first: 10, second: 20 };
+for (var key in object) {
+  console.log(key + ':' + object[key]);
+}
+var last = 'unchanged';
+for (last in {}) {
+}
+console.log(last);
+var destination = {};
+for (destination.key in { a: 1, b: 2 }) {
+  console.log(destination.key);
+}
+function makeReader() {
+  var reader;
+  for (var name in { x: 1, y: 2 }) {
+    reader = function () {
+      return name;
+    };
+  }
+  return reader;
+}
+console.log(makeReader()());

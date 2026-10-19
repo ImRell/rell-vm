@@ -96,13 +96,18 @@ test('CLI syntax error names original input and creates no nested output', async
   assert.match(result.stderr, /Unexpected token/);
   await assert.rejects(stat(join(dir, 'build')), { code: 'ENOENT' });
 });
-test('CLI normalized builds retain wx no-overwrite guarantee', async (t) => {
-  const dir = await fixture(t, 'const f=(x=42)=>x;capture(f());');
-  await writeFile(join(dir, 'output.js'), 'keep');
+test('CLI normalized builds overwrite existing output', async (t) => {
+  const source = 'const f=(x=42)=>x;capture(f());';
+  const dir = await fixture(t, source);
+  await writeFile(join(dir, 'output.js'), 'STALE_NORMALIZED_OUTPUT');
   const result = await run(['input file.js', '-o', 'output.js'], dir);
-  assert.equal(result.code, 1);
-  assert.match(result.stderr, /output path already exists/);
-  assert.equal(await readFile(join(dir, 'output.js'), 'utf8'), 'keep');
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(result.stderr, '');
+  assert.match(result.stdout, /Built:/);
+  const output = await readFile(join(dir, 'output.js'), 'utf8');
+  assert.ok(!output.includes('STALE_NORMALIZED_OUTPUT'));
+  assert.deepEqual(evaluate(output), [42]);
+  assert.equal(await readFile(join(dir, 'input file.js'), 'utf8'), source);
 });
 test('parse --no-normalize anywhere and retain minify', () => {
   for (const args of [

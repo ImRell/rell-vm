@@ -1,0 +1,58 @@
+// ES5 source. The compiler emits the project's own text instruction format.
+function Counter(start) {
+  this.value = start;
+}
+Counter.prototype.next = function (step) {
+  this.value += step;
+  return this.value;
+};
+function LoggedCounter(start) {
+  Counter.call(this, start);
+}
+LoggedCounter.prototype = Object.create(Counter.prototype);
+LoggedCounter.prototype.constructor = LoggedCounter;
+var counter = new LoggedCounter(10);
+var advance = counter.next.bind(counter, 2);
+console.log(
+  [1, 2, 3]
+    .map(function () {
+      return advance();
+    })
+    .join(','),
+);
+console.log(counter instanceof Counter);
+console.log(counter instanceof LoggedCounter);
+function guarded(value) {
+  try {
+    if (value < 0) throw new RangeError('negative');
+    return value * 2;
+  } catch (error) {
+    return error.name;
+  } finally {
+    console.log('finally:' + value);
+  }
+}
+console.log(guarded(3));
+console.log(guarded(-1));
+outer: for (var i = 0; i < 3; i++) {
+  try {
+    for (var j = 0; j < 2; j++) {
+      if (i === 0) continue outer;
+      if (i === 2) break outer;
+      console.log('pair:' + i + ':' + j);
+    }
+  } finally {
+    console.log('loop-finally:' + i);
+  }
+}
+function makeCounter() {
+  var count = 0;
+  return function () {
+    try {
+      return ++count;
+    } finally {
+      console.log('callback:' + count);
+    }
+  };
+}
+console.log([1, 2].map(makeCounter()).join(','));

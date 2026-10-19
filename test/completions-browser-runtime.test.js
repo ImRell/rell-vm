@@ -25,7 +25,7 @@ for (const minify of [false, true]) {
   const mode = minify ? 'minified' : 'normal';
   test(`${mode}: full example equals native and has no script-var leak`, async () => {
     const source = await fs.readFile(
-      new URL('../examples/es5-completions.js', import.meta.url),
+      new URL('./fixtures/es5-completions.source.txt', import.meta.url),
       'utf8',
     );
     const expected = [],

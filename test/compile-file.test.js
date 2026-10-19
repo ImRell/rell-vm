@@ -132,16 +132,34 @@ test('запрещает совпадающие входной и выходно
   assert.equal(await readFile(inputPath, 'utf8'), original);
 });
 
-test('не перезаписывает существующий output', async (t) => {
-  const { inputPath, outputPath } = await createFixture(t);
+test('перезаписывает существующий output и обрезает старое содержимое', async (t) => {
+  const { inputPath, outputPath } = await createFixture(t, 'capture(42);');
+  await writeFile(outputPath, '// STALE_API_OUTPUT\n'.repeat(10000), 'utf8');
+  const result = await compileFile({ inputPath, outputPath });
+  const output = await readFile(outputPath, 'utf8');
+  assert.ok(!output.includes('STALE_API_OUTPUT'));
+  assert.equal(result.bytes, Buffer.byteLength(output, 'utf8'));
+  assert.equal(result.outputPath, outputPath);
+  const values = [];
+  new Script(output).runInContext(
+    createContext(
+      { capture: (v) => values.push(v) },
+      { codeGeneration: { strings: false, wasm: false } },
+    ),
+    { timeout: 3000 },
+  );
+  assert.deepEqual(values, [42]);
+  assert.equal(await readFile(inputPath, 'utf8'), 'capture(42);');
+});
 
-  await writeFile(outputPath, 'existing content', 'utf8');
-
-  await assert.rejects(compileFile({ inputPath, outputPath }), {
-    code: 'EEXIST',
-  });
-
-  assert.equal(await readFile(outputPath, 'utf8'), 'existing content');
+test('сохраняет существующий output при ошибке компиляции', async (t) => {
+  const { inputPath, outputPath } = await createFixture(t, 'with (object) {}');
+  await writeFile(outputPath, 'KEEP_EXISTING_OUTPUT', 'utf8');
+  await assert.rejects(
+    compileFile({ inputPath, outputPath }),
+    /Unsupported statement: WithStatement/,
+  );
+  assert.equal(await readFile(outputPath, 'utf8'), 'KEEP_EXISTING_OUTPUT');
 });
 
 test('отклоняет отсутствующий файл и директорию вместо файла', async (t) => {

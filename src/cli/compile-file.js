@@ -10,7 +10,7 @@ import { buildBrowserScript } from '../packer/build-browser-script.js';
  *
  * По умолчанию нормализует ES6+ в ES5 перед генерацией assembly.
  * Не исполняет пользовательскую программу.
- * Не перезаписывает существующий выходной файл.
+ * После успешной сборки перезаписывает существующий выходной файл.
  *
  * @param {{
  *   inputPath: string,
@@ -125,8 +125,7 @@ export async function compileFile({
     recursive: true,
   });
 
-  // wx создаёт новый файл и отклоняет запись, если путь уже занят.
-  // Предварительная проверка exists() не заменяет этот флаг.
+  // Записываем только после успешной сборки; w создаёт или перезаписывает output.
   await writeFile(absoluteOutputPath, output, {
     encoding: 'utf8',
     flag: 'w',

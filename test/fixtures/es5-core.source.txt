@@ -1,0 +1,66 @@
+function hash(text) {
+  var result = 0;
+  for (var i = 0; i < text.length; i++) {
+    result = ((result << 5) - result + text.charCodeAt(i)) | 0;
+  }
+  return result >>> 0;
+}
+function classify(value) {
+  switch (typeof value) {
+    case 'number':
+      return value !== value ? 'NaN' : 'number';
+    case 'string':
+      return /^\d+$/.test(value) ? 'numeric string' : 'text';
+    case 'undefined':
+      return 'missing';
+    default:
+      return 'other';
+  }
+}
+function requireNumber(value) {
+  if (typeof value !== 'number') throw 'Expected a number';
+  return value;
+}
+console.log(hash('rell-vm'));
+console.log(classify('123'));
+console.log(classify('hello'));
+console.log(classify(NaN));
+console.log(typeof missingName);
+console.log(typeof requireNumber);
+console.log(requireNumber(42));
+var value = {
+  valueOf: function () {
+    return 7;
+  },
+};
+console.log(value + 5);
+console.log(value == '7');
+console.log(value !== 7);
+var bits = 12;
+bits ^= 5;
+bits <<= 1;
+console.log(bits);
+var object = { keep: 1, remove: 2 };
+console.log(delete object.remove);
+console.log('remove' in object);
+console.log('keep' in object);
+console.log(/hello/i.test('HELLO'));
+console.log(/a/g instanceof RegExp);
+var count = 0;
+console.log(void count++);
+console.log(count);
+var result = '';
+for (var index = 0; index < 4; index++) {
+  switch (index) {
+    case 1:
+      continue;
+    case 2:
+      result += 'two';
+      break;
+    default:
+      result += index;
+  }
+  result += '|';
+}
+debugger;
+console.log(result);

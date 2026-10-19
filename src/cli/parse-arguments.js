@@ -6,7 +6,7 @@ Usage:
 
 Obfuscation is ON by default: name mangling, encrypted program and lazy strings, random instruction dialect, runtime minification.
 Options:
-  -o, --output <path>    Output JavaScript file (must not exist)
+  -o, --output <path>    Output JavaScript file (overwritten if it exists)
       --keep-function-names  Preserve function.name, still hide local/parameter names
       --no-mangle-names  Disable metadata name mangling (debugging/reflection)
       --no-randomize-instructions  Use canonical instruction names (debugging)

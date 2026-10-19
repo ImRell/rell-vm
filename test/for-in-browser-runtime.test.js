@@ -26,7 +26,7 @@ for (const minify of [false, true]) {
   const mode = minify ? 'minified' : 'normal';
   test(`самостоятельный ${mode} runtime исполняет пример дважды без утечки var`, async () => {
     const example = await fs.readFile(
-      new URL('../examples/for-in.js', import.meta.url),
+      new URL('./fixtures/for-in.source.txt', import.meta.url),
       'utf8',
     );
     const code = await bundle(example, minify);

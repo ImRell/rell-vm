@@ -177,17 +177,37 @@ test('CLI не создаёт output при неподдерживаемом с�
   await assert.rejects(stat(join(directory, 'output.js')), { code: 'ENOENT' });
 });
 
-test('CLI не перезаписывает существующий output', async (t) => {
-  const directory = await createFixture(t);
+test('CLI перезаписывает существующий output и обрезает старое содержимое', async (t) => {
+  const directory = await createFixture(t, 'capture(42);');
   const outputPath = join(directory, 'output.js');
-
-  await writeFile(outputPath, 'keep this content', 'utf8');
-
+  await writeFile(outputPath, '// STALE_CLI_OUTPUT\n'.repeat(10000), 'utf8');
   const result = await runCli(['input.js', '-o', 'output.js'], directory);
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(result.stderr, '');
+  assert.match(result.stdout, /Built:/);
+  const output = await readFile(outputPath, 'utf8');
+  assert.ok(!output.includes('STALE_CLI_OUTPUT'));
+  const values = [];
+  new Script(output).runInContext(
+    createContext(
+      { capture: (v) => values.push(v) },
+      { codeGeneration: { strings: false, wasm: false } },
+    ),
+    { timeout: 3000 },
+  );
+  assert.deepEqual(values, [42]);
+  assert.equal(
+    await readFile(join(directory, 'input.js'), 'utf8'),
+    'capture(42);',
+  );
+});
 
+test('CLI сохраняет старый output при ошибке компиляции', async (t) => {
+  const directory = await createFixture(t, 'with (object) {}');
+  const outputPath = join(directory, 'output.js');
+  await writeFile(outputPath, 'KEEP_EXISTING_OUTPUT', 'utf8');
+  const result = await runCli(['input.js', '-o', 'output.js'], directory);
   assert.equal(result.code, 1);
-  assert.equal(result.stdout, '');
-  assert.match(result.stderr, /output path already exists/);
-
-  assert.equal(await readFile(outputPath, 'utf8'), 'keep this content');
+  assert.match(result.stderr, /Unsupported statement: WithStatement/);
+  assert.equal(await readFile(outputPath, 'utf8'), 'KEEP_EXISTING_OUTPUT');
 });

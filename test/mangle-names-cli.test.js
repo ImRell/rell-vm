@@ -138,16 +138,22 @@ test('CLI rejects keep-function-names with disabled mangling', async (t) => {
   assert.match(result.stderr, /requires name mangling/);
   await assert.rejects(stat(join(dir, 'out.js')), { code: 'ENOENT' });
 });
-test('CLI retains no-overwrite guarantee', async (t) => {
-  const dir = await fixture(t, 'var SecretInternalTotal=42;');
-  await writeFile(join(dir, 'out.js'), 'keep');
+test('CLI mangled builds overwrite existing output', async (t) => {
+  const source = 'var SecretInternalTotal=42;capture(SecretInternalTotal);';
+  const dir = await fixture(t, source);
+  await writeFile(join(dir, 'out.js'), 'STALE_MANGLED_OUTPUT');
   const result = await run(
     ['input file.js', '-o', 'out.js', '--mangle-names'],
     dir,
   );
-  assert.equal(result.code, 1);
-  assert.match(result.stderr, /output path already exists/);
-  assert.equal(await readFile(join(dir, 'out.js'), 'utf8'), 'keep');
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(result.stderr, '');
+  assert.match(result.stdout, /Built:/);
+  const output = await readFile(join(dir, 'out.js'), 'utf8');
+  assert.ok(!output.includes('STALE_MANGLED_OUTPUT'));
+  assert.ok(!output.includes('SecretInternalTotal'));
+  assert.deepEqual(values(output), [42]);
+  assert.equal(await readFile(join(dir, 'input file.js'), 'utf8'), source);
 });
 test('parser forwards both new flags', () => {
   const options = parseArguments([

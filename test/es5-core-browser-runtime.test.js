@@ -25,7 +25,7 @@ for (const minify of [false, true]) {
   const mode = minify ? 'minified' : 'normal';
   test(`${mode}: большой ES5 пример совпадает с native и повторяется без утечки`, async () => {
     const source = await fs.readFile(
-      new URL('../examples/es5-core.js', import.meta.url),
+      new URL('./fixtures/es5-core.source.txt', import.meta.url),
       'utf8',
     );
     const expected = [],

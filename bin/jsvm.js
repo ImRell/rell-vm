@@ -1,9 +1,6 @@
 #!/usr/bin/env node
 
-import {
-  HELP_TEXT,
-  parseArguments,
-} from '../src/cli/parse-arguments.js';
+import { HELP_TEXT, parseArguments } from '../src/cli/parse-arguments.js';
 
 import { compileFile } from '../src/cli/compile-file.js';
 
@@ -29,27 +26,16 @@ async function main(args) {
   try {
     const result = await compileFile(options);
 
-    console.log(
-      `Built: ${result.outputPath} (${result.bytes} bytes)`,
-    );
+    console.log(`Built: ${result.outputPath} (${result.bytes} bytes)`);
 
     return 0;
   } catch (error) {
-    if (error?.code === 'EEXIST') {
-      console.error(
-        'Build error: output path already exists. ' +
-          'Choose another output path or remove the existing file.',
-      );
-    } else {
-      console.error(`Build error: ${getMessage(error)}`);
-    }
+    console.error(`Build error: ${getMessage(error)}`);
 
     return 1;
   }
 }
 
 function getMessage(error) {
-  return error instanceof Error
-    ? error.message
-    : String(error);
+  return error instanceof Error ? error.message : String(error);
 }
