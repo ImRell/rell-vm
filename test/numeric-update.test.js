@@ -6,7 +6,7 @@ import {
   updateNumeric,
 } from '../src/runtime/numeric-update.js';
 
-test('ToNumeric преобразует примитивы и сохраняет BigInt', () => {
+test('ToNumeric converts primitives and preserves BigInt', () => {
   for (const [value, expected] of [
     ['10', 10],
     ['', 0],
@@ -21,7 +21,7 @@ test('ToNumeric преобразует примитивы и сохраняет 
   ])
     assert.ok(Object.is(toNumeric(value), expected));
 });
-test('++/-- совпадают с native для специальных числовых значений', () => {
+test('++/-- match native for special numeric values', () => {
   for (const value of [
     0,
     -0,
@@ -46,27 +46,27 @@ test('++/-- совпадают с native для специальных числ�
     }
   }
 });
-test('postfix возвращает числовое старое значение, не исходную строку', () => {
+test('postfix returns numeric old value, not original string', () => {
   assert.deepEqual(updateNumeric('10', true), { oldValue: 10, newValue: 11 });
 });
-test('postfix сохраняет -0 и меняет его на 1/-1', () => {
+test('postfix preserves -0 and changes it to 1/-1', () => {
   for (const increment of [true, false]) {
     const result = updateNumeric(-0, increment);
     assert.ok(Object.is(result.oldValue, -0));
     assert.equal(result.newValue, increment ? 1 : -1);
   }
 });
-test('BigInt wrapper не превращается в Number', () => {
+test('BigInt wrapper is not converted to Number', () => {
   assert.deepEqual(updateNumeric(Object(2n), true), {
     oldValue: 2n,
     newValue: 3n,
   });
 });
-test('Symbol и Symbol wrapper вызывают TypeError', () => {
+test('Symbol and Symbol wrapper throw TypeError', () => {
   for (const value of [Symbol(), Object(Symbol())])
     assert.throws(() => toNumeric(value), TypeError);
 });
-test('числовой hint и исходный receiver передаются Symbol.toPrimitive', () => {
+test('number hint and original receiver are passed to Symbol.toPrimitive', () => {
   const events = [];
   const object = {
     [Symbol.toPrimitive](hint) {
@@ -77,7 +77,7 @@ test('числовой hint и исходный receiver передаются Sy
   assert.deepEqual(updateNumeric(object, true), { oldValue: 7, newValue: 8 });
   assert.deepEqual(events, [['number', true]]);
 });
-test('для number hint valueOf идёт раньше toString', () => {
+test('for number hint valueOf comes before toString', () => {
   const events = [];
   const object = {
     valueOf() {
@@ -92,7 +92,7 @@ test('для number hint valueOf идёт раньше toString', () => {
   assert.equal(toNumeric(object), 8);
   assert.deepEqual(events, ['valueOf', 'toString']);
 });
-test('второй метод не читается после успешного первого', () => {
+test('second method is not read after successful first', () => {
   assert.equal(
     toNumeric({
       valueOf() {
@@ -105,7 +105,7 @@ test('второй метод не читается после успешног�
     42,
   );
 });
-test('не-callable valueOf пропускается', () => {
+test('non-callable valueOf is skipped', () => {
   assert.equal(
     toNumeric({
       valueOf: 1,
@@ -116,7 +116,7 @@ test('не-callable valueOf пропускается', () => {
     42,
   );
 });
-test('null Symbol.toPrimitive использует обычный путь', () => {
+test('null Symbol.toPrimitive uses normal path', () => {
   assert.equal(
     toNumeric({
       [Symbol.toPrimitive]: null,
@@ -127,7 +127,7 @@ test('null Symbol.toPrimitive использует обычный путь', () 
     42,
   );
 });
-test('не-callable Symbol.toPrimitive не пропускается', () => {
+test('non-callable Symbol.toPrimitive is not skipped', () => {
   assert.throws(
     () =>
       toNumeric({
@@ -139,7 +139,7 @@ test('не-callable Symbol.toPrimitive не пропускается', () => {
     TypeError,
   );
 });
-test('объектный результат Symbol.toPrimitive — ошибка без fallback', () => {
+test('object result from Symbol.toPrimitive is error without fallback', () => {
   assert.throws(
     () =>
       toNumeric({
@@ -153,7 +153,7 @@ test('объектный результат Symbol.toPrimitive — ошибка 
     TypeError,
   );
 });
-test('отсутствие примитивного результата вызывает TypeError', () => {
+test('absence of primitive result throws TypeError', () => {
   assert.throws(
     () =>
       toNumeric({
@@ -168,7 +168,7 @@ test('отсутствие примитивного результата выз�
   );
   assert.throws(() => toNumeric(Object.create(null)), TypeError);
 });
-test('исключения getter и conversion method сохраняются', () => {
+test('getter and conversion method exceptions are preserved', () => {
   const error = {};
   for (const value of [
     {
@@ -192,7 +192,7 @@ test('исключения getter и conversion method сохраняются', 
       (e) => e === error,
     );
 });
-test('getter valueOf вызывается один раз и возвращённый метод получает receiver', () => {
+test('getter valueOf is called once and returned method receives receiver', () => {
   let calls = 0;
   const object = {
     get valueOf() {
@@ -206,7 +206,7 @@ test('getter valueOf вызывается один раз и возвращён�
   updateNumeric(object, true);
   assert.equal(calls, 1);
 });
-test('ToPropertyKey использует string hint и сохраняет Symbol', () => {
+test('ToPropertyKey uses string hint and preserves Symbol', () => {
   const symbol = Symbol();
   assert.equal(toPropertyKey(symbol), symbol);
   const events = [];
@@ -221,7 +221,7 @@ test('ToPropertyKey использует string hint и сохраняет Symbo
   );
   assert.deepEqual(events, ['string']);
 });
-test('ToPropertyKey пробует toString раньше valueOf', () => {
+test('ToPropertyKey attempts toString before valueOf', () => {
   const events = [];
   const key = toPropertyKey({
     toString() {
@@ -236,7 +236,7 @@ test('ToPropertyKey пробует toString раньше valueOf', () => {
   assert.equal(key, '7');
   assert.deepEqual(events, ['toString', 'valueOf']);
 });
-test('ToPropertyKey преобразует примитивы без повторного пользовательского вызова', () => {
+test('ToPropertyKey converts primitives without repeated user call', () => {
   for (const [input, expected] of [
     [null, 'null'],
     [undefined, 'undefined'],
@@ -246,6 +246,6 @@ test('ToPropertyKey преобразует примитивы без повто�
   ])
     assert.equal(toPropertyKey(input), expected);
 });
-test('направление update должно быть boolean', () => {
+test('update direction must be boolean', () => {
   assert.throws(() => updateNumeric(1, 1), TypeError);
 });

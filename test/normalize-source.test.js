@@ -36,7 +36,7 @@ function normalizeAndRun(source) {
   return runJavaScript(normalized);
 }
 
-test('возвращает строку ES5 и принимает пустой исходник', () => {
+test('returns ES5 string and accepts empty source', () => {
   for (const source of ['', 'var value = 42; value;']) {
     const normalized = normalizeSource(source);
 
@@ -50,7 +50,7 @@ test('возвращает строку ES5 и принимает пустой �
   );
 });
 
-test('преобразует let, const и стрелочные функции', () => {
+test('transforms let, const and arrow functions', () => {
   const source = `
     const add = (left, right) => left + right;
     let result = add(10, 3);
@@ -63,7 +63,7 @@ test('преобразует let, const и стрелочные функции',
   assert.equal(runJavaScript(normalized), 13);
 });
 
-test('преобразует шаблонные строки и деструктуризацию', () => {
+test('transforms template literals and destructuring', () => {
   const source = [
     'const object = { name: "VM", count: 2 };',
     'const { name, count } = object;',
@@ -73,7 +73,7 @@ test('преобразует шаблонные строки и деструкт
   assert.equal(normalizeAndRun(source), 'VM:2');
 });
 
-test('преобразует параметры по умолчанию, rest и spread вызова', () => {
+test('transforms default parameters, rest and call spread', () => {
   const source = `
     function sum(first = 10, ...rest) {
       return first + rest[0] + rest[1];
@@ -86,7 +86,7 @@ test('преобразует параметры по умолчанию, rest и
   assert.equal(normalizeAndRun(source), 15);
 });
 
-test('преобразует классы в синтаксис ES5', () => {
+test('transforms classes to ES5 syntax', () => {
   const source = `
     class Counter {
       constructor(value) {
@@ -105,7 +105,7 @@ test('преобразует классы в синтаксис ES5', () => {
   assert.equal(normalizeAndRun(source), 42);
 });
 
-test('сохраняет лексический this стрелочной функции', () => {
+test('preserves lexical this of arrow function', () => {
   const source = `
     const object = {
       value: 42,
@@ -122,7 +122,7 @@ test('сохраняет лексический this стрелочной фун
   assert.equal(normalizeAndRun(source), 42);
 });
 
-test('сохраняет отдельные привязки let в итерациях', () => {
+test('preserves distinct let bindings across iterations', () => {
   const source = `
     const readers = [];
 
@@ -136,7 +136,7 @@ test('сохраняет отдельные привязки let в итерац
   assert.equal(normalizeAndRun(source), 3);
 });
 
-test('преобразует async и генераторы в синтаксис ES5', async () => {
+test('transforms async and generators to ES5 syntax', async () => {
   const source = `
     function* values() {
       yield 40;
@@ -156,13 +156,13 @@ test('преобразует async и генераторы в синтаксис
 
   assertES5(normalized);
 
-  // Promise предоставляет тестовое JS-окружение.
+  // Promise provides test JS environment.
   const result = await runJavaScript(normalized);
 
   assert.equal(result, 42);
 });
 
-test('нормализация не выполняет исходник и отклоняет неверный синтаксис', () => {
+test('normalization does not execute source and rejects invalid syntax', () => {
   assert.doesNotThrow(() => {
     normalizeSource('throw new Error("Must not execute");');
   });
@@ -183,7 +183,7 @@ test('нормализация не выполняет исходник и от�
   }
 });
 
-test('проверяет тип исходника и имя файла', () => {
+test('validates source type and filename', () => {
   for (const source of [undefined, null, 42, {}, []]) {
     assert.throws(
       () => normalizeSource(source),

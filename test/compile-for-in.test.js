@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { compileToAssembly } from '../src/compiler/compile-assembly.js';
-import { executeAssembly } from '../src/runtime/execute-assembly.js';
+import { executeAssembly } from './es5-test-helpers.js';
 
 function outcome(source, factory = () => ({}), native = false) {
   const values = [],
@@ -39,19 +39,19 @@ function compare(source, factory) {
   return actual;
 }
 
-test('for-in var перебирает ключи и сохраняет последнее значение', () => {
+test('for-in var iterates keys and retains last value', () => {
   assert.deepEqual(
     compare('for(var k in {a:1,b:2}){capture(k);}capture(k);').values,
     ['a', 'b', 'b'],
   );
 });
-test('пустой объект не присваивает ключ существующему let', () => {
+test('empty object does not assign key to existing let', () => {
   assert.deepEqual(
     compare('let k="initial";for(k in {}){capture(k);}capture(k);').values,
     ['initial'],
   );
 });
-test('var поднят даже при пустом и недостижимом цикле', () => {
+test('var is hoisted even in empty and unreachable loop', () => {
   assert.deepEqual(
     compare(
       'capture(k);if(false){for(var k in {a:1}){}}for(var empty in {}){}capture(empty);',
@@ -59,7 +59,7 @@ test('var поднят даже при пустом и недостижимом 
     [undefined, undefined],
   );
 });
-test('RHS вычисляется один раз, до присваивания ключа', () => {
+test('RHS is evaluated once before key assignment', () => {
   const factory = (events) => ({
     source() {
       events.push('rhs');
@@ -71,13 +71,13 @@ test('RHS вычисляется один раз, до присваивания 
     ['rhs'],
   );
 });
-test('переименование переменной источника не меняет перечисляемый объект', () => {
+test('rebinding source variable does not change iterated object', () => {
   assert.deepEqual(
     compare('var o={a:1,b:2};for(var k in o){capture(k);o={z:1};}').values,
     ['a', 'b'],
   );
 });
-test('порядок ключей, прототипы, неперечисляемые и символьные ключи', () => {
+test('key order, prototypes, non-enumerable, and symbol keys', () => {
   const factory = () => {
     const object = Object.assign(Object.create({ p: 1 }), {
       b: 2,
@@ -95,7 +95,7 @@ test('порядок ключей, прототипы, неперечисляе�
     'p',
   ]);
 });
-test('неперечисляемое свойство затеняет одноимённое свойство прототипа', () => {
+test('non-enumerable property shadows prototype property of same name', () => {
   const factory = () => {
     const object = Object.create({ a: 1, b: 2 });
     Object.defineProperty(object, 'a', { value: 9 });
@@ -105,7 +105,7 @@ test('неперечисляемое свойство затеняет одно�
     'b',
   ]);
 });
-test('геттер значения не вызывается при перечислении', () => {
+test('property value getter is not invoked during enumeration', () => {
   const factory = (events) => ({
     object: {
       get a() {
@@ -119,7 +119,7 @@ test('геттер значения не вызывается при переч�
     [],
   );
 });
-test('геттер значения выполняется только при явном чтении', () => {
+test('property value getter executes only upon explicit access', () => {
   const factory = (events) => ({
     object: {
       get a() {
@@ -133,7 +133,7 @@ test('геттер значения выполняется только при �
     { values: [4], events: ['get'], error: undefined },
   );
 });
-test('null и undefined пропускают тело без ошибки', () => {
+test('null and undefined skip body without error', () => {
   assert.deepEqual(
     compare(
       'var k="old";for(k in null)capture("bad");for(k in undefined)capture("bad");capture(k);',
@@ -141,40 +141,40 @@ test('null и undefined пропускают тело без ошибки', () =
     ['old'],
   );
 });
-test('строка перечисляет индексы, массив пропускает дыры', () => {
+test('string enumerates indices, array skips holes', () => {
   assert.deepEqual(
     compare('for(var k in "hi")capture(k);for(k in [,1,,3])capture(k);').values,
     ['0', '1', '1', '3'],
   );
 });
-test('числа, boolean, BigInt, Symbol не создают итераций', () => {
+test('numbers, boolean, BigInt, Symbol produce zero iterations', () => {
   for (const value of [1, true, 2n, Symbol('s')])
     assert.deepEqual(
       compare('for(var k in value)capture(k);', () => ({ value })).values,
       [],
     );
 });
-test('break не посещает следующие ключи', () => {
+test('break does not visit subsequent keys', () => {
   assert.deepEqual(
     compare('for(var k in {a:1,b:2}){capture(k);break;}capture(k);').values,
     ['a', 'a'],
   );
 });
-test('continue переходит к следующему ключу', () => {
+test('continue advances to next key', () => {
   assert.deepEqual(
     compare('for(var k in {a:1,b:2,c:3}){if(k==="b")continue;capture(k);}')
       .values,
     ['a', 'c'],
   );
 });
-test('вложенные for-in имеют независимые состояния', () => {
+test('nested for-in loops have independent state', () => {
   assert.deepEqual(
     compare('for(var a in {x:1,y:2})for(var b in {p:1,q:2})capture(a+b);')
       .values,
     ['xp', 'xq', 'yp', 'yq'],
   );
 });
-test('break внутреннего for-in не завершает внешний цикл', () => {
+test('inner for-in break does not terminate outer loop', () => {
   assert.deepEqual(
     compare(
       'for(var a in {x:1,y:2}){for(var b in {p:1,q:2}){capture(a+b);break;}capture(a);}',
@@ -182,7 +182,7 @@ test('break внутреннего for-in не завершает внешний
     ['xp', 'x', 'yp', 'y'],
   );
 });
-test('continue внутреннего for-in не затрагивает внешний', () => {
+test('inner for-in continue does not affect outer loop', () => {
   assert.deepEqual(
     compare(
       'for(var a in {x:1,y:2}){for(var b in {p:1,q:2}){if(b==="p")continue;capture(a+b);}capture(a);}',
@@ -190,7 +190,7 @@ test('continue внутреннего for-in не затрагивает вне�
     ['xq', 'x', 'yq', 'y'],
   );
 });
-test('for-in комбинируется с for и do-while', () => {
+test('for-in combines with for and do-while', () => {
   assert.deepEqual(
     compare(
       'for(var i=0;i<2;i++){for(var k in {a:1,b:2}){var n=0;do{n++;if(n<2)continue;capture(i+k+n);}while(n<2);}}',
@@ -198,7 +198,7 @@ test('for-in комбинируется с for и do-while', () => {
     ['0a2', '0b2', '1a2', '1b2'],
   );
 });
-test('после внутреннего цикла восстанавливаются break и continue внешнего', () => {
+test('outer break and continue are restored after inner loop', () => {
   assert.deepEqual(
     compare(
       'var n=0;while(n<3){n++;for(var k in {a:1}){break;}if(n<3)continue;capture(n);break;}',
@@ -206,7 +206,7 @@ test('после внутреннего цикла восстанавливаю�
     [3],
   );
 });
-test('break снимает lexical-блоки, оставляя внешнее окружение', () => {
+test('break pops lexical blocks leaving outer environment', () => {
   assert.deepEqual(
     compare(
       'let outer=10;for(var k in {a:1}){{let outer=20;break;}}capture(outer);',
@@ -214,7 +214,7 @@ test('break снимает lexical-блоки, оставляя внешнее �
     [10],
   );
 });
-test('continue снимает lexical-блоки перед следующей итерацией', () => {
+test('continue pops lexical blocks before next iteration', () => {
   assert.deepEqual(
     compare(
       'let outer=10;for(var k in {a:1,b:2}){{let outer=k;capture(outer);continue;}}capture(outer);',
@@ -222,7 +222,7 @@ test('continue снимает lexical-блоки перед следующей �
     ['a', 'b', 10],
   );
 });
-test('новый блок каждой итерации создаёт отдельные захваченные ячейки', () => {
+test('new block per iteration creates distinct captured cells', () => {
   assert.deepEqual(
     compare(
       'var readers=[];var i=0;for(var k in {a:1,b:2}){let copy=k;readers[i++]=function(){return copy;};continue;}capture(readers[0]());capture(readers[1]());',
@@ -230,7 +230,7 @@ test('новый блок каждой итерации создаёт отде�
     ['a', 'b'],
   );
 });
-test('var в цикле остаётся общей ячейкой для замыканий', () => {
+test('var in loop remains shared cell across closures', () => {
   assert.deepEqual(
     compare(
       'var readers=[];var i=0;for(var k in {a:1,b:2}){readers[i++]=function(){return k;};}capture(readers[0]());capture(readers[1]());',
@@ -238,7 +238,7 @@ test('var в цикле остаётся общей ячейкой для зам
     ['b', 'b'],
   );
 });
-test('return из тела не продолжает перечисление', () => {
+test('return from body does not continue enumeration', () => {
   assert.deepEqual(
     compare(
       'function f(){for(var k in {a:1,b:2}){let value=k;return value;}return "empty";}capture(f());capture(f());',
@@ -246,7 +246,7 @@ test('return из тела не продолжает перечисление', 
     ['a', 'a'],
   );
 });
-test('рекурсивные вызовы не разделяют временные local-слоты', () => {
+test('recursive calls do not share temporary local slots', () => {
   assert.deepEqual(
     compare(
       'function f(n){var s="";for(var k in {a:1,b:2}){s+=k;if(n>0)s+=f(n-1);}return s;}capture(f(1));',
@@ -254,30 +254,30 @@ test('рекурсивные вызовы не разделяют временн
     ['aabbab'],
   );
 });
-test('присваивание существующей привязке внешнего замыкания', () => {
+test('assignment to existing outer closure binding', () => {
   assert.deepEqual(
     compare('var k="old";function f(){for(k in {a:1,b:2}){}}f();capture(k);')
       .values,
     ['b'],
   );
 });
-test('TDZ назначения проверяется только при наличии ключа', () => {
+test('target TDZ is checked only when key exists', () => {
   assert.equal(compare('for(k in {a:1}){}let k;').error, 'ReferenceError');
   assert.equal(compare('for(k in {}){}let k;').error, undefined);
 });
-test('TDZ чтения RHS сохраняется', () => {
+test('RHS read TDZ is preserved', () => {
   assert.equal(
     compare('for(var k in object){}let object;').error,
     'ReferenceError',
   );
 });
-test('const назначения запрещает запись, пустой цикл её не делает', () => {
+test('const target disallows write, empty loop does not write', () => {
   assert.equal(compare('const k="old";for(k in {a:1}){}').error, 'TypeError');
   assert.deepEqual(compare('const k="old";for(k in {}){}capture(k);').values, [
     'old',
   ]);
 });
-test('имя named function expression сохраняет sloppy/strict правила записи', () => {
+test('named function expression name preserves sloppy/strict write rules', () => {
   assert.deepEqual(
     compare(
       'var f=function name(){for(name in {a:1}){}return name===f;};capture(f());',
@@ -290,7 +290,7 @@ test('имя named function expression сохраняет sloppy/strict прав
     'TypeError',
   );
 });
-test('member-цель вычисляется заново для каждого ключа', () => {
+test('member target is evaluated afresh for each key', () => {
   const factory = (events) => {
     const target = {
       set value(v) {
@@ -317,7 +317,7 @@ test('member-цель вычисляется заново для каждого 
     ['rhs', 'base', 'key', 'set:a', 'base', 'key', 'set:b'],
   );
 });
-test('пустой RHS не вычисляет member-цель', () => {
+test('empty RHS does not evaluate member target', () => {
   const factory = (events) => ({
     base() {
       events.push('bad');
@@ -329,7 +329,7 @@ test('пустой RHS не вычисляет member-цель', () => {
     [],
   );
 });
-test('member-цель допускает изменение объекта и computed key из тела', () => {
+test('member target allows modifying object and computed key from body', () => {
   assert.deepEqual(
     compare(
       'var objects=[{},{}];var i=0;for(objects[i++].key in {a:1,b:2}){}capture(objects[0].key);capture(objects[1].key);capture(i);',
@@ -337,7 +337,7 @@ test('member-цель допускает изменение объекта и co
     ['a', 'b', 2],
   );
 });
-test('member-запись не читает старое значение', () => {
+test('member write does not read old value', () => {
   const factory = (events) => ({
     target: {
       get x() {
@@ -353,7 +353,7 @@ test('member-запись не читает старое значение', () =
     'b',
   ]);
 });
-test('строгая запись в readonly target вызывает TypeError, sloppy игнорирует', () => {
+test('strict write to readonly target throws TypeError, sloppy ignores', () => {
   const factory = () => ({ target: Object.freeze({ x: 0 }) });
   assert.equal(
     compare('"use strict";for(target.x in {a:1}){}', factory).error,
@@ -364,7 +364,7 @@ test('строгая запись в readonly target вызывает TypeError,
     [0],
   );
 });
-test('null member-цель вычисляет ключ до ошибки записи', () => {
+test('null member target evaluates key before write error', () => {
   const factory = (events) => ({
     key() {
       events.push('key');
@@ -375,7 +375,7 @@ test('null member-цель вычисляет ключ до ошибки зап�
   assert.equal(result.error, 'TypeError');
   assert.deepEqual(result.events, ['key']);
 });
-test('VM setter может выполнить вложенный цикл и вернуться к внешнему', () => {
+test('VM setter can execute nested loop and return to outer', () => {
   assert.deepEqual(
     compare(
       'var target={set x(v){for(var inner in {z:1})capture(v+inner);}};for(target.x in {a:1,b:2})capture("body");',
@@ -383,7 +383,7 @@ test('VM setter может выполнить вложенный цикл и в�
     ['az', 'body', 'bz', 'body'],
   );
 });
-test('legacy var initializer выполняется до RHS даже для пустого объекта', () => {
+test('legacy var initializer runs before RHS even for empty object', () => {
   const factory = (events) => ({
     init() {
       events.push('init');
@@ -401,7 +401,7 @@ test('legacy var initializer выполняется до RHS даже для п�
   assert.deepEqual(result.events, ['init', 'rhs']);
   assert.deepEqual(result.values, ['seed']);
 });
-test('удаление ещё не посещённого свойства видно следующей итерации', () => {
+test('deleting unvisited property is visible to subsequent iteration', () => {
   const factory = () => {
     const object = { a: 1, b: 2, c: 3 };
     return {
@@ -417,7 +417,7 @@ test('удаление ещё не посещённого свойства ви�
     ['a', 'c'],
   );
 });
-test('изменения enumerable и прототипа повторяют native поведение движка', () => {
+test('enumerable and prototype mutations mirror native engine behavior', () => {
   const factory = () => {
     const prototype = { p: 1, q: 2 },
       object = Object.assign(Object.create(prototype), { a: 1, b: 2 });
@@ -432,7 +432,7 @@ test('изменения enumerable и прототипа повторяют nat
   };
   compare('for(var k in object){capture(k);if(k==="a")mutate();}', factory);
 });
-test('исключение перечисления Proxy сохраняется без подмены', () => {
+test('Proxy enumeration exception is preserved without replacement', () => {
   const error = Error('enumeration'),
     object = new Proxy(
       {},
@@ -450,7 +450,7 @@ test('исключение перечисления Proxy сохраняется
     (e) => e === error,
   );
 });
-test('исключение RHS не запускает тело', () => {
+test('RHS exception does not enter body', () => {
   const factory = (events) => ({
     rhs() {
       events.push('rhs');
@@ -463,7 +463,7 @@ test('исключение RHS не запускает тело', () => {
     error: 'RangeError',
   });
 });
-test('бесконечное тело for-in останавливается общим лимитом', () => {
+test('infinite for-in body stops at global step limit', () => {
   assert.throws(
     () =>
       executeAssembly(compileToAssembly('for(var k in {a:1})while(true){}'), {
@@ -472,13 +472,13 @@ test('бесконечное тело for-in останавливается об
     /Instruction limit exceeded: 100/,
   );
 });
-test('компиляция не вычисляет RHS и возвращает текст новых инструкций', () => {
+test('compilation does not evaluate RHS and returns valid instructions', () => {
   const text = compileToAssembly('for(var k in mustNotRun()){}');
-  assert.equal(typeof text, 'string');
-  assert.match(text, /js\.for_in\.create/);
-  assert.match(text, /js\.for_in\.next/);
+  assert.ok(typeof text === 'string' || text instanceof String);
+  assert.match(String(text), /js\.for_in\.create/);
+  assert.match(String(text), /js\.for_in\.next/);
 });
-test('повторные запуски изолированы и не создают глобальные var', () => {
+test('repeated runs are isolated and do not create global vars', () => {
   const environment = {
       capture(v) {
         values.push(v);
@@ -491,20 +491,20 @@ test('повторные запуски изолированы и не созд�
   assert.deepEqual(values, ['a', 'b', 'a', 'b']);
   assert.equal(Object.hasOwn(environment, 'k'), false);
 });
-test('for-in let/const пока явно требуют нормализации', () => {
+test('for-in let/const currently require normalization', () => {
   for (const source of ['for(let k in {}){}', 'for(const k in {}){}'])
     assert.throws(
       () => compileToAssembly(source),
       /Lexical for-in bindings require normalization/,
     );
 });
-test('неразрешённая цель не становится неявной глобальной переменной', () => {
+test('unresolved target does not become implicit global variable', () => {
   assert.throws(
     () => compileToAssembly('for(unknown in {}){}'),
     /Assignment to unresolved identifier/,
   );
 });
-test('for-of и destructuring пока отклоняются даже в недостижимом коде', () => {
+test('for-of and destructuring are rejected even in unreachable code', () => {
   for (const source of [
     'for(var k of []){}',
     'for(var [k] in {}){}',
@@ -514,14 +514,14 @@ test('for-of и destructuring пока отклоняются даже в нед
   ])
     assert.throws(() => compileToAssembly(source), SyntaxError);
 });
-test('ошибка for-in сохраняет файл, строку и столбец', () => {
+test('for-in error preserves filename, line, and column', () => {
   assert.throws(
     () =>
       compileToAssembly('\nfor(let k in {}){}', { filename: 'enumerate.js' }),
     /enumerate\.js:2:5: Lexical for-in bindings/,
   );
 });
-test('неподдерживаемый код тела проверяется даже для пустого RHS', () => {
+test('unsupported body code is checked even for empty RHS', () => {
   assert.throws(
     () => compileToAssembly('for(var k in {}){x => x;}'),
     /Unsupported expression: ArrowFunctionExpression/,

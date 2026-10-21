@@ -3,8 +3,13 @@ import assert from 'node:assert/strict';
 import { VMFunction, attachVMFunction } from '../src/runtime/vm-function.js';
 import { LexicalEnvironment } from '../src/runtime/lexical-environment.js';
 import { CallFrame } from '../src/runtime/call-frame.js';
-import { executeAssembly } from '../src/runtime/execute-assembly.js';
+import { assembleTextToBytecode } from '../src/bytecode/assemble.js';
+import { executeBytecode } from '../src/runtime/execute-bytecode.js';
 import { compileToAssembly } from '../src/compiler/compile-assembly.js';
+
+function executeAssembly(source, options = {}) {
+  return executeBytecode(assembleTextToBytecode(source), options);
+}
 function make(options = {}) {
   return new VMFunction({
     source: 'js.arg.get 0\nreturn',

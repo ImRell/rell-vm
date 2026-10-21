@@ -187,6 +187,18 @@ export function openProgramEnvelope(envelope) {
     for (let j = 0; j < 64 && offset + j < ciphertext.length; j++)
       plain[offset + j] = ciphertext[offset + j] ^ stream[j];
   }
+  if (
+    plain.length >= 4 &&
+    plain[0] === 0x52 &&
+    plain[1] === 0x56 &&
+    plain[2] === 0x4d &&
+    plain[3] === 0x01
+  ) {
+    const copy = new Uint8Array(plain);
+    key.fill(0);
+    plain.fill(0);
+    return copy;
+  }
   const segments = [];
   for (let start = 0; start < plain.length; start += 8192) {
     const units = [];

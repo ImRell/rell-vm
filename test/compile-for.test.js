@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { compileToAssembly } from '../src/compiler/compile-assembly.js';
-import { executeAssembly } from '../src/runtime/execute-assembly.js';
+import { executeAssembly } from './es5-test-helpers.js';
 
 function outcome(source, factory = () => ({}), native = false) {
   const values = [],
@@ -39,20 +39,20 @@ function compare(source, factory) {
   return actual;
 }
 
-test('for var вычисляет сумму и оставляет var доступным после цикла', () => {
+test('for var computes sum and leaves var available after loop', () => {
   assert.deepEqual(
     compare('var sum=0;for(var i=0;i<4;i++){sum+=i;}capture(sum);capture(i);')
       .values,
     [6, 4],
   );
 });
-test('for expression initializer выполняется один раз', () => {
+test('for expression initializer executes once', () => {
   assert.deepEqual(
     compare('var i=99;for(i=0;i<3;i++){capture(i);}capture(i);').values,
     [0, 1, 2, 3],
   );
 });
-test('for initializer, test, body, update соблюдают порядок', () => {
+test('for initializer, test, body, update follow exact order', () => {
   const factory = (events) => {
     let i;
     return {
@@ -89,7 +89,7 @@ test('for initializer, test, body, update соблюдают порядок', ()
     ],
   );
 });
-test('ложное начальное условие пропускает body и update', () => {
+test('false initial condition skips body and update', () => {
   const factory = (events) => ({
     init() {
       events.push('init');
@@ -106,7 +106,7 @@ test('ложное начальное условие пропускает body �
     ['init'],
   );
 });
-test('continue выполняет update, break его пропускает', () => {
+test('continue executes update, break skips it', () => {
   assert.deepEqual(
     compare(
       'var sum=0;for(var i=0;i<5;i++){if(i===1)continue;if(i===3)break;sum+=i;}capture(sum);capture(i);',
@@ -114,38 +114,38 @@ test('continue выполняет update, break его пропускает', ()
     [2, 3],
   );
 });
-test('for без init', () => {
+test('for without init', () => {
   compare('var i=0;for(;i<3;i++)capture(i);capture(i);');
 });
-test('for без test', () => {
+test('for without test', () => {
   compare('for(var i=0;;i++){if(i===3)break;capture(i);}capture(i);');
 });
-test('for без update', () => {
+test('for without update', () => {
   compare('for(var i=0;i<3;){capture(i++);}capture(i);');
 });
-test('for без всех трёх частей', () => {
+test('for without all three parts', () => {
   compare('var i=0;for(;;){if(i===3)break;capture(i++);}capture(i);');
 });
-test('continue в for без update возвращает к test', () => {
+test('continue in for without update returns to test', () => {
   compare('var i=0;for(;i<4;){i++;if(i===2)continue;capture(i);}capture(i);');
 });
-test('несколько var declarations вычисляются слева направо', () => {
+test('multiple var declarations evaluate from left to right', () => {
   compare(
     'for(var first=10,second=first+2,index=0;index<1;index++){capture(first);capture(second);}capture(index);',
   );
 });
-test('comma в init и update исполняется слева направо', () => {
+test('comma in init and update executes from left to right', () => {
   compare(
     'var i,j;for(i=0,j=10;i<3;i++,j-=2){capture(i);capture(j);}capture(i);capture(j);',
   );
 });
-test('comma в test возвращает только последнее значение', () => {
+test('comma in test returns only the last value', () => {
   compare('var count=0;for(var i=0;(count++,i<3);i++){}capture(count);');
 });
-test('for поддерживает пустое тело', () => {
+test('for supports empty body', () => {
   compare('for(var i=0;i<3;i++);capture(i);');
 });
-test('условие использует JavaScript truthiness', () => {
+test('condition uses JavaScript truthiness', () => {
   for (const condition of ['false', '0', '""', 'null', 'undefined', 'NaN'])
     assert.deepEqual(
       compare(`var n=0;for(var i=0;${condition};i++){n++;break;}capture(n);`)
@@ -159,49 +159,49 @@ test('условие использует JavaScript truthiness', () => {
       [1],
     );
 });
-test('var из недостижимого for поднят, initializer не выполняется', () => {
+test('var from unreachable for is hoisted, initializer is not executed', () => {
   compare('capture(i);if(false){for(var i=bad();false;){} }capture(i);');
 });
-test('var в init и body принадлежит функции, не блоку', () => {
+test('var in init and body belongs to function, not block', () => {
   compare(
     'function f(){capture(i);{for(var i=0;i<2;i++){var saved=i;}}capture(i);return saved;}capture(f());',
   );
 });
-test('var в for не сбрасывает параметр без initializer', () => {
+test('var in for does not reset parameter without initializer', () => {
   compare('function f(i){for(var i;i<3;i++){}return i;}capture(f(2));');
 });
-test('initializer с одноимённым var видит поднятое undefined', () => {
+test('initializer with same-name var sees hoisted undefined', () => {
   compare(
     'var external=99;function f(){for(var external=external;false;){}return external;}capture(f());',
   );
 });
-test('for var closures разделяют одну изменяемую привязку', () => {
+test('for var closures share a single mutable binding', () => {
   compare(
     'var functions=[];for(var i=0;i<3;i++){functions.push(function(){return i;});}capture(functions[0]());capture(functions[1]());capture(functions[2]());',
   );
 });
-test('возврат из for пропускает update и остаток функции', () => {
+test('return from for skips update and remainder of function', () => {
   compare(
     'var n=0;function f(){for(var i=0;i<3;n++,i++){return 42;}return 99;}capture(f());capture(n);',
   );
 });
-test('for работает внутри getter и VM callback преобразования', () => {
+test('for works inside getter and VM conversion callback', () => {
   compare(
     'var o={get x(){var sum=0;for(var i=0;i<3;i++)sum+=i;return sum;}};capture(o.x);var value={valueOf:function(){var n=0;for(var j=0;j<2;j++)n++;return n;}};capture(value++);capture(value);',
   );
 });
-test('body может изменить переменную до update/test', () => {
+test('body can mutate loop variable before update/test', () => {
   compare(
     'var seen=[];for(var i=0;i<6;i++){seen.push(i);if(i===1)i=3;}capture(seen.join(","));capture(i);',
   );
 });
-test('инициализатор может вернуть произвольное значение', () => {
+test('initializer can evaluate arbitrary expression value', () => {
   compare('var i=0;for(({x:42});i<2;i++){capture(i);}');
 });
-test('update может вернуть объект без накопления его на стеке', () => {
+test('update can return an object without accumulating it on stack', () => {
   compare('var i=0;for(;i<3;(i++,{})){capture(i);}capture(i);');
 });
-test('исключения initializer/test/body/update сохраняют идентичность', () => {
+test('initializer/test/body/update exceptions preserve identity', () => {
   const error = {};
   for (const source of [
     'for(bad();false;){}',
@@ -221,7 +221,7 @@ test('исключения initializer/test/body/update сохраняют ид�
       (e) => e === error,
     );
 });
-test('ошибка initializer не вычисляет test и body', () => {
+test('initializer error does not evaluate test and body', () => {
   const error = {},
     events = [];
   assert.throws(
@@ -251,7 +251,7 @@ test('ошибка initializer не вычисляет test и body', () => {
   );
   assert.deepEqual(events, ['init']);
 });
-test('бесконечный for останавливается лимитом VM', () => {
+test('infinite for loop stops on VM step limit', () => {
   for (const source of [
     'for(;;){}',
     'for(;;);',
@@ -262,7 +262,7 @@ test('бесконечный for останавливается лимитом V
       /Instruction limit exceeded: 100/,
     );
 });
-test('компиляция проверяет даже недостижимые init/test/update/body', () => {
+test('compilation validates even unreachable init/test/update/body', () => {
   for (const source of [
     'if(false){for(x => x;false;){} }',
     'for(;false;x => x){}',
@@ -273,13 +273,11 @@ test('компиляция проверяет даже недостижимые 
       /Unsupported expression: ArrowFunctionExpression/,
     );
 });
-test('компиляция for не выполняет вызовы исходника', () => {
-  assert.equal(
-    typeof compileToAssembly('for(init();condition();update()){body();}'),
-    'string',
-  );
+test('for compilation does not evaluate source calls', () => {
+  const result = compileToAssembly('for(init();condition();update()){body();}');
+  assert.ok(typeof result === 'string' || result instanceof String);
 });
-test('for let/const явно требуют нормализации', () => {
+test('for let/const explicitly requires normalization', () => {
   for (const source of [
     'for(let i=0;i<2;i++){}',
     'for(const i=0;false;){}',
@@ -290,14 +288,14 @@ test('for let/const явно требуют нормализации', () => {
       /Lexical for initializers require normalization/,
     );
 });
-test('for-of не включается случайно', () => {
+test('for-of is not supported', () => {
   for (const source of [
     'for(var item of items){}',
     'outer:for(var k of []){break outer;}',
   ])
     assert.throws(() => compileToAssembly(source), SyntaxError);
 });
-test('ошибка for initializer сохраняет файл и позицию', () => {
+test('for initializer error preserves filename and position', () => {
   assert.throws(
     () =>
       compileToAssembly('\nfor (let i=0;i<1;i++) {}', { filename: 'for.js' }),

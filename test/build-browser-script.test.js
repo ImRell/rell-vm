@@ -18,7 +18,7 @@ function runGeneratedScript(source, sandbox = {}) {
   });
 }
 
-test('упаковывает строку инструкций в самостоятельный скрипт', async () => {
+test('packages instruction string into standalone script', async () => {
   const source = await buildBrowserScript('js.const 42\ndrop\nhalt\n');
 
   assert.equal(typeof source, 'string');
@@ -27,11 +27,11 @@ test('упаковывает строку инструкций в самосто
   assert.doesNotThrow(() => new Script(source));
   assert.doesNotThrow(() => runGeneratedScript(source));
 
-  // По умолчанию исходный текст программы зашифрован.
+  // By default, source text of program is encrypted.
   assert.ok(!source.includes('js.const 42'));
 });
 
-test('выходной скрипт исполняет вычисления и циклы', async () => {
+test('output script executes computations and loops', async () => {
   const assembly = compileToAssembly(`
     let index = 0;
     let sum = 0;
@@ -53,7 +53,7 @@ test('выходной скрипт исполняет вычисления и �
   assert.doesNotThrow(() => runGeneratedScript(source));
 });
 
-test('сборка не выполняет инструкции пользовательской программы', async () => {
+test('build does not execute user program instructions', async () => {
   const assembly = compileToAssembly('1n + 1;');
   const source = await buildBrowserScript(assembly);
 
@@ -66,7 +66,7 @@ test('сборка не выполняет инструкции пользова
   );
 });
 
-test('сборка сохраняет проверки TDZ и const', async () => {
+test('build preserves TDZ and const checks', async () => {
   const cases = [
     ['value; let value;', 'ReferenceError'],
     ['const value = 10; value = 20;', 'TypeError'],
@@ -86,7 +86,7 @@ test('сборка сохраняет проверки TDZ и const', async () =
   }
 });
 
-test('runtime изолирован и допускает повторный запуск', async () => {
+test('runtime is isolated and permits repeated execution', async () => {
   const assembly = compileToAssembly('let value = 42; value += 1;');
 
   const source = await buildBrowserScript(assembly);
@@ -107,7 +107,7 @@ test('runtime изолирован и допускает повторный за
   assert.deepEqual(Reflect.ownKeys(sandbox), []);
 });
 
-test('минификация сохраняет исполнение строковой программы', async () => {
+test('minification preserves execution of string program', async () => {
   const assembly = compileToAssembly(`
     let value = 2n;
     value *= 3n;
@@ -126,7 +126,7 @@ test('минификация сохраняет исполнение строк�
   }
 });
 
-test('отклоняет неверные параметры, числовой формат и ошибочный текст', async () => {
+test('rejects invalid options, numeric formats, and erroneous text', async () => {
   await assert.rejects(
     buildBrowserScript('halt', { minify: 'yes' }),
     /minify must be a boolean/,
@@ -150,7 +150,7 @@ test('отклоняет неверные параметры, числовой �
   );
 });
 
-test('упаковка сохраняет строковые литералы без исполнения их содержимого', async () => {
+test('bundling preserves string literals without executing their contents', async () => {
   const payload = '"); globalThis.injected = true; // </script>';
   const literal = JSON.stringify(payload);
 

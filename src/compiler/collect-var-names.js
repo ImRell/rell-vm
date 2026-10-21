@@ -3,24 +3,24 @@ const SCOPE_BOUNDARIES = new Set([
   'FunctionExpression',
   'ArrowFunctionExpression',
 
-  // Границы тел методов в Babel AST.
+  // Method body boundaries in Babel AST.
   'ObjectMethod',
   'ClassMethod',
   'ClassPrivateMethod',
 
-  // Объявления внутри static-блока не принадлежат внешней области.
+  // Declarations inside static blocks do not belong to the outer scope.
   'StaticBlock',
 ]);
 
 /**
- * Собирает уникальные имена var в одном скрипте или теле функции.
+ * Collects unique var binding names within a single script or function body.
  *
- * Входит во вложенные блоки, условия и циклы,
- * но не входит во вложенные функции.
+ * Traverses nested blocks, conditionals, and loops,
+ * but does not traverse into nested functions.
  *
- * Не выполняет код и не изменяет AST.
+ * Does not execute code or mutate the AST.
  *
- * @param {object} root Babel Program или BlockStatement тела функции.
+ * @param {object} root Babel Program or function body BlockStatement.
  * @returns {ReadonlyArray<string>}
  */
 export function collectVarNames(root) {

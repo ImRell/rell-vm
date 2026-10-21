@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { compileToAssembly } from '../src/compiler/compile-assembly.js';
-import { executeAssembly } from '../src/runtime/execute-assembly.js';
+import { executeAssembly } from './es5-test-helpers.js';
 
 function evaluateExpression(source) {
   const assembly = compileToAssembly(`(${source});`);
@@ -18,33 +18,33 @@ function evaluateExpression(source) {
   });
 }
 
-test('пустой скрипт компилируется в halt', () => {
+test('empty script compiles to halt', () => {
   const assembly = compileToAssembly('');
 
-  assert.equal(assembly, 'halt\n');
+  assert.equal(String(assembly), 'halt\n');
   assert.equal(executeAssembly(assembly), undefined);
 });
 
-test('пустые инструкции не генерируют код', () => {
-  assert.equal(compileToAssembly(';;;'), 'halt\n');
+test('empty statements generate no code', () => {
+  assert.equal(String(compileToAssembly(';;;')), 'halt\n');
 });
 
-test('выражение компилируется с удалением результата', () => {
+test('expression compiles with result dropped', () => {
   const assembly = compileToAssembly('10 - 3;');
 
   assert.equal(
-    assembly,
+    String(assembly),
     ['js.const 10', 'js.const 3', 'js.sub', 'drop', 'halt', ''].join('\n'),
   );
 
   assert.equal(executeAssembly(assembly), undefined);
 });
 
-test('несколько выражений выполняются последовательно', () => {
+test('multiple expressions execute sequentially', () => {
   const assembly = compileToAssembly('1 + 2; 3 * 4;');
 
   assert.equal(
-    assembly,
+    String(assembly),
     [
       'js.const 1',
       'js.const 2',
@@ -62,7 +62,7 @@ test('несколько выражений выполняются послед�
   assert.equal(executeAssembly(assembly), undefined);
 });
 
-test('компилирует примитивные литералы', () => {
+test('compiles primitive literals', () => {
   const cases = [
     ['42', 42],
     ['"hello"', 'hello'],
@@ -78,7 +78,7 @@ test('компилирует примитивные литералы', () => {
   }
 });
 
-test('сохраняет приоритет операций и скобки', () => {
+test('preserves operator precedence and parentheses', () => {
   const cases = [
     ['2 + 3 * 4', 14],
     ['(2 + 3) * 4', 20],
@@ -92,14 +92,14 @@ test('сохраняет приоритет операций и скобки', (
   }
 });
 
-test('компилирует унарные операции', () => {
+test('compiles unary operations', () => {
   assert.equal(evaluateExpression('-5'), -5);
   assert.equal(evaluateExpression('!0'), true);
   assert.equal(evaluateExpression('!!1'), true);
   assert.ok(Object.is(evaluateExpression('-0'), -0));
 });
 
-test('компилирует сравнения и сохраняет JS-семантику', () => {
+test('compiles comparisons and preserves JS semantics', () => {
   const cases = [
     ['1 === 1', true],
     ['1 === "1"', false],
@@ -116,7 +116,7 @@ test('компилирует сравнения и сохраняет JS-сем�
   }
 });
 
-test('принимает use strict и игнорирует неизвестные директивы', () => {
+test('accepts use strict and ignores unknown directives', () => {
   assert.doesNotThrow(() => {
     compileToAssembly('"use strict"; 1 + 2;');
   });
@@ -124,7 +124,7 @@ test('принимает use strict и игнорирует неизвестны
   assert.doesNotThrow(() => compileToAssembly('"custom directive";'));
 });
 
-test('отклоняет неподдерживаемые конструкции и операторы', () => {
+test('rejects unsupported constructs and operators', () => {
   const cases = [
     ['with ({}) { 1; }', /Unsupported statement: WithStatement/],
     ['class C {}', /Unsupported statement: ClassDeclaration/],
@@ -138,7 +138,7 @@ test('отклоняет неподдерживаемые конструкции
   }
 });
 
-test('ошибка компиляции содержит файл, строку и столбец', () => {
+test('compilation error includes file, line and column', () => {
   assert.throws(
     () => {
       compileToAssembly('\n  x => x;', {
@@ -153,13 +153,13 @@ test('ошибка компиляции содержит файл, строку 
   );
 });
 
-test('компиляция не выполняет арифметические операции исходника', () => {
+test('compilation does not evaluate arithmetic in source', () => {
   const assembly = compileToAssembly('1n + 1;');
 
   assert.throws(() => executeAssembly(assembly), TypeError);
 });
 
-test('&& возвращает значение одного из операндов', () => {
+test('&& returns value of one of the operands', () => {
   const cases = [
     ['0 && 42', 0],
     ['"" && 42', ''],
@@ -174,7 +174,7 @@ test('&& возвращает значение одного из операнд�
   }
 });
 
-test('|| возвращает значение одного из операндов', () => {
+test('|| returns value of one of the operands', () => {
   const cases = [
     ['0 || 42', 42],
     ['"" || "fallback"', 'fallback'],
@@ -189,19 +189,19 @@ test('|| возвращает значение одного из операнд�
   }
 });
 
-test('логические операторы пропускают ненужную правую часть', () => {
+test('logical operators skip unnecessary right-hand side', () => {
   assert.equal(evaluateExpression('false && (1n + 1)'), false);
 
   assert.equal(evaluateExpression('true || (1n + 1)'), true);
 });
 
-test('логические операторы выполняют необходимую правую часть', () => {
+test('logical operators evaluate required right-hand side', () => {
   for (const source of ['true && (1n + 1)', 'false || (1n + 1)']) {
     assert.throws(() => evaluateExpression(source), TypeError);
   }
 });
 
-test('сохраняет приоритет и вложенность логических выражений', () => {
+test('preserves precedence and nesting of logical expressions', () => {
   const cases = [
     ['0 || 2 && 3', 3],
     ['(0 || 2) && 3', 3],
@@ -217,7 +217,7 @@ test('сохраняет приоритет и вложенность логич
   }
 });
 
-test('тернарный оператор выбирает ветку по правилам JavaScript', () => {
+test('ternary operator selects branch according to JavaScript rules', () => {
   const cases = [
     ['true ? 10 : 20', 10],
     ['false ? 10 : 20', 20],
@@ -232,7 +232,7 @@ test('тернарный оператор выбирает ветку по пр�
   }
 });
 
-test('тернарный оператор выполняет только выбранную ветку', () => {
+test('ternary operator evaluates only the selected branch', () => {
   assert.equal(evaluateExpression('true ? 42 : (1n + 1)'), 42);
 
   assert.equal(evaluateExpression('false ? (1n + 1) : 42'), 42);
@@ -242,7 +242,7 @@ test('тернарный оператор выполняет только выб
   assert.throws(() => evaluateExpression('false ? 42 : (1n + 1)'), TypeError);
 });
 
-test('поддерживает вложенные тернарные и логические выражения', () => {
+test('supports nested ternary and logical expressions', () => {
   const cases = [
     ['false ? 1 : true ? 2 : 3', 2],
     ['true ? false ? 1 : 2 : 3', 2],
@@ -256,29 +256,29 @@ test('поддерживает вложенные тернарные и логи
   }
 });
 
-test('пустые блоки не генерируют дополнительных инструкций', () => {
+test('empty blocks generate no extra instructions', () => {
   const assembly = compileToAssembly('{} { {} ; }');
 
-  assert.equal(assembly, 'halt\n');
+  assert.equal(String(assembly), 'halt\n');
   assert.equal(executeAssembly(assembly), undefined);
 });
 
-test('блок компилирует вложенные инструкции последовательно', () => {
+test('block compiles nested statements sequentially', () => {
   const assembly = compileToAssembly('{ 10; { 20; } }');
 
   assert.equal(
-    assembly,
+    String(assembly),
     ['js.const 10', 'drop', 'js.const 20', 'drop', 'halt', ''].join('\n'),
   );
 
   assert.equal(executeAssembly(assembly), undefined);
 });
 
-test('if без else генерирует переход к следующей инструкции', () => {
+test('if without else generates jump to next instruction', () => {
   const assembly = compileToAssembly('if (false) 10; 20;');
 
   assert.equal(
-    assembly,
+    String(assembly),
     [
       'js.const false',
       'jump_if_false L0',
@@ -295,7 +295,7 @@ test('if без else генерирует переход к следующей �
   assert.equal(executeAssembly(assembly), undefined);
 });
 
-test('if без else пропускает или выполняет тело по условию', () => {
+test('if without else skips or executes body by condition', () => {
   const skippedConditions = ['false', '0', '""', 'null'];
 
   for (const condition of skippedConditions) {
@@ -313,7 +313,7 @@ test('if без else пропускает или выполняет тело п�
   }
 });
 
-test('if / else выполняет только выбранную ветку', () => {
+test('if / else executes only the selected branch', () => {
   const sources = [
     'if (true) { 42; } else { 1n + 1; }',
     'if (false) { 1n + 1; } else { 42; }',
@@ -333,7 +333,7 @@ test('if / else выполняет только выбранную ветку', 
   }
 });
 
-test('поддерживает else if и вложенные условия', () => {
+test('supports else if and nested conditions', () => {
   const sources = [
     `
       if (false) {
@@ -362,7 +362,7 @@ test('поддерживает else if и вложенные условия', ()
   }
 });
 
-test('поддерживает пустые ветки и составные условия', () => {
+test('supports empty branches and compound conditions', () => {
   const sources = [
     'if (true) {} else {}',
     'if (false) ;',
@@ -376,7 +376,7 @@ test('поддерживает пустые ветки и составные у�
   }
 });
 
-test('проверяет поддерживаемый синтаксис даже в недостижимой ветке', () => {
+test('validates supported syntax even in unreachable branch', () => {
   assert.throws(
     () => compileToAssembly('if (false) { x => x; }'),
     /Unsupported expression: ArrowFunctionExpression/,
@@ -387,7 +387,7 @@ test('проверяет поддерживаемый синтаксис даж�
   );
 });
 
-test('ранее запрещённые объявления, вызовы и литералы теперь исполняются', () => {
+test('previously prohibited declarations, calls and literals now execute', () => {
   const values = [];
   const text = compileToAssembly(
     'var x = 10; function f(v) { return v + 2; } capture({values:[x,f(x)]}.values.join(","));',

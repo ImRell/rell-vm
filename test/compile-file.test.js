@@ -48,7 +48,7 @@ function runOutput(source) {
   });
 }
 
-test('компилирует файл и возвращает сведения о результате', async (t) => {
+test('compiles file and returns result details', async (t) => {
   const { inputPath, outputPath } = await createFixture(t);
 
   const result = await compileFile({
@@ -66,7 +66,7 @@ test('компилирует файл и возвращает сведения �
   assert.doesNotThrow(() => runOutput(output));
 });
 
-test('создаёт вложенные директории output', async (t) => {
+test('creates nested output directories', async (t) => {
   const { directory, inputPath } = await createFixture(t);
   const outputPath = join(directory, 'build', 'browser', 'output.js');
 
@@ -81,7 +81,7 @@ test('создаёт вложенные директории output', async (t) 
   assert.doesNotThrow(() => runOutput(output));
 });
 
-test('не выполняет исходную программу во время сборки', async (t) => {
+test('does not execute source program during compilation', async (t) => {
   const { inputPath, outputPath } = await createFixture(t, 'null.value;');
 
   await compileFile({
@@ -100,7 +100,7 @@ test('не выполняет исходную программу во врем�
   );
 });
 
-test('не создаёт output при ошибке компиляции', async (t) => {
+test('does not create output on compilation error', async (t) => {
   const { directory, inputPath } = await createFixture(
     t,
     'with ({}) { value; }',
@@ -117,7 +117,7 @@ test('не создаёт output при ошибке компиляции', asyn
   await assert.rejects(stat(outputDirectory), { code: 'ENOENT' });
 });
 
-test('запрещает совпадающие входной и выходной пути', async (t) => {
+test('disallows matching input and output paths', async (t) => {
   const { inputPath } = await createFixture(t);
   const original = await readFile(inputPath, 'utf8');
 
@@ -132,7 +132,7 @@ test('запрещает совпадающие входной и выходно
   assert.equal(await readFile(inputPath, 'utf8'), original);
 });
 
-test('перезаписывает существующий output и обрезает старое содержимое', async (t) => {
+test('overwrites existing output and truncates old content', async (t) => {
   const { inputPath, outputPath } = await createFixture(t, 'capture(42);');
   await writeFile(outputPath, '// STALE_API_OUTPUT\n'.repeat(10000), 'utf8');
   const result = await compileFile({ inputPath, outputPath });
@@ -152,7 +152,7 @@ test('перезаписывает существующий output и обрез
   assert.equal(await readFile(inputPath, 'utf8'), 'capture(42);');
 });
 
-test('сохраняет существующий output при ошибке компиляции', async (t) => {
+test('preserves existing output on compilation error', async (t) => {
   const { inputPath, outputPath } = await createFixture(t, 'with (object) {}');
   await writeFile(outputPath, 'KEEP_EXISTING_OUTPUT', 'utf8');
   await assert.rejects(
@@ -162,7 +162,7 @@ test('сохраняет существующий output при ошибке к�
   assert.equal(await readFile(outputPath, 'utf8'), 'KEEP_EXISTING_OUTPUT');
 });
 
-test('отклоняет отсутствующий файл и директорию вместо файла', async (t) => {
+test('rejects missing file and directory path instead of file', async (t) => {
   const { directory, outputPath } = await createFixture(t);
 
   await assert.rejects(
@@ -182,7 +182,7 @@ test('отклоняет отсутствующий файл и директор
   );
 });
 
-test('проверяет пути и параметр минификации', async () => {
+test('validates paths and minification options', async () => {
   for (const value of ['', ' ', null, undefined, 42]) {
     await assert.rejects(
       compileFile({

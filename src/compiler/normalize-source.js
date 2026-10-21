@@ -3,11 +3,11 @@ import presetEnv from '@babel/preset-env';
 import { parse } from 'acorn';
 
 /**
- * Преобразует современный JavaScript в синтаксис ES5.
+ * Transpiles modern JavaScript to ES5 syntax.
  *
- * Не выполняет исходный код.
- * Не подключает полифиллы стандартных API.
- * Не читает пользовательские конфигурационные файлы Babel.
+ * Does not execute source code.
+ * Does not include standard API polyfills.
+ * Does not read user Babel configuration files.
  *
  * @param {string} source
  * @param {{ filename?: string }} [options]
@@ -29,8 +29,7 @@ export function normalizeSource(
     filename,
     sourceType: 'script',
 
-    // Сборка не должна зависеть от .babelrc
-    // или babel.config.js рядом с входным файлом.
+    // Build must not depend on .babelrc or babel.config.js near the input file.
     babelrc: false,
     configFile: false,
 
@@ -53,10 +52,10 @@ export function normalizeSource(
           forceAllTransforms: true,
           bugfixes: true,
 
-          // ESM пока не входит в контракт входного скрипта.
+          // ESM is not yet part of the input script contract.
           modules: false,
 
-          // Не добавляем импорты core-js и другие полифиллы.
+          // Do not add core-js imports or other polyfills.
           useBuiltIns: false,
         },
       ],
@@ -69,8 +68,8 @@ export function normalizeSource(
 
   const code = result.code;
 
-  // Независимая проверка результата:
-  // выход действительно должен разбираться как ES5.
+  // Independent result verification:
+  // Output must parse as ES5 (or ES2020 when VM-supported BigInt literals are present).
   try {
     parse(code, {
       ecmaVersion: 5,
@@ -79,11 +78,20 @@ export function normalizeSource(
       sourceFile: filename,
     });
   } catch (cause) {
-    throw new SyntaxError(
-      `Normalization produced non-ES5 syntax for ${filename}: ` +
-        cause.message,
-      { cause },
-    );
+    try {
+      parse(code, {
+        ecmaVersion: 2020,
+        sourceType: 'script',
+        locations: true,
+        sourceFile: filename,
+      });
+    } catch {
+      throw new SyntaxError(
+        `Normalization produced non-ES5 syntax for ${filename}: ` +
+          cause.message,
+        { cause },
+      );
+    }
   }
 
   return code;

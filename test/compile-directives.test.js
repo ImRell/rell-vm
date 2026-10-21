@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { compileToAssembly } from '../src/compiler/compile-assembly.js';
-import { executeAssembly } from '../src/runtime/execute-assembly.js';
+import { executeAssembly } from './es5-test-helpers.js';
 function run(source) {
   const values = [],
     environment = { undefined, capture: (v) => values.push(v) };

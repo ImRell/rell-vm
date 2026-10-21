@@ -1,7 +1,7 @@
 /**
- * Области скрипта, функций и блоков.
- * Каждая область соответствует одному runtime-окружению.
- * Блоки разделяют счётчик слотов кадра; функции имеют новый счётчик.
+ * Script, function, and block lexical scopes.
+ * Each scope corresponds to one runtime environment.
+ * Blocks share the frame slot allocator; functions have a fresh allocator.
  */
 export class LexicalScope {
   #parent;
@@ -44,7 +44,7 @@ export class LexicalScope {
     return this.#createBinding(name, kind);
   }
 
-  /** Вызывается для отдельной private-области имени FunctionExpression. */
+  /** Called for the private name scope of a FunctionExpression. */
   declareFunctionName(name) {
     assertName(name);
     if (this.#bindings.has(name)) {
@@ -74,7 +74,7 @@ export class LexicalScope {
     return this.resolveReference(name)?.binding ?? null;
   }
 
-  /** Ищет привязку только внутри текущего кадра. */
+  /** Looks up a binding within the current frame only. */
   resolveFrameReference(name) {
     assertName(name);
     let scope = this;
@@ -89,7 +89,7 @@ export class LexicalScope {
     return null;
   }
 
-  /** Глубина считает и блоки, и границы функций. */
+  /** Depth counts both blocks and function boundaries. */
   resolveReference(name) {
     assertName(name);
     let scope = this;

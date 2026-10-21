@@ -12,13 +12,9 @@ import { createStringDecoder } from '../src/runtime/string-decoder.js';
 import { openProgramEnvelope } from '../src/runtime/open-program.js';
 import { sealProgram } from '../src/packer/seal-program.js';
 import { parseAssembly } from '../src/assembly/parse.js';
-import { executeAssembly } from '../src/runtime/execute-assembly.js';
+import { executeAssembly } from './es5-test-helpers.js';
 import { compileToAssembly } from '../src/compiler/compile-assembly.js';
 import { buildBrowserScript } from '../src/packer/build-browser-script.js';
-import {
-  createInstructionAliases,
-  relabelAssembly,
-} from '../src/packer/randomize-instructions.js';
 import { compileFile } from '../src/cli/compile-file.js';
 import { parseArguments, HELP_TEXT } from '../src/cli/parse-arguments.js';
 
@@ -260,21 +256,6 @@ test('raw parser requires explicit decoder and restricts reference operand types
   assert.throws(() => p.instructions[0].args[0], SyntaxError);
 });
 
-test('supports both randomized and canonical dialects', () => {
-  const aliases = createInstructionAliases();
-  const s = relabelAssembly(
-    compileToAssembly('var f=function(a){return "secret"+a;};capture(f("x"));'),
-    aliases,
-  );
-  const p = protectAssemblyStrings(s, aliases);
-  assert.ok(!p.program.includes('secret'));
-  assert.ok(!p.program.includes('capture'));
-  assert.ok(!p.program.includes('"'));
-  for (const [, envelope] of p.entries) {
-    const value = openProgramEnvelope(envelope);
-    if (value.includes('\n')) assert.ok(value.includes(aliases.get('return')));
-  }
-});
 
 const rich = `function factory(n){return function f(delta){n+=delta;return n;};}
 var fn=factory(39);capture(fn(3));capture(fn(1));

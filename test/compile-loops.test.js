@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { compileToAssembly } from '../src/compiler/compile-assembly.js';
-import { executeAssembly } from '../src/runtime/execute-assembly.js';
+import { executeAssembly } from './es5-test-helpers.js';
 
 const MAX_STEPS = 10_000;
 
@@ -26,11 +26,11 @@ function evaluateScript(source) {
   });
 }
 
-test('while с ложным условием не выполняет тело', () => {
+test('while with false condition does not execute body', () => {
   assert.equal(runScript('while (false) { 1n + 1; }'), undefined);
 });
 
-test('while повторяет тело до изменения условия', () => {
+test('while repeats body until condition changes', () => {
   assert.equal(
     evaluateScript(`
       let index = 0;
@@ -45,7 +45,7 @@ test('while повторяет тело до изменения условия',
   );
 });
 
-test('while позволяет вычислить сумму последовательности', () => {
+test('while allows computing sequence sum', () => {
   assert.equal(
     evaluateScript(`
       let index = 1;
@@ -62,7 +62,7 @@ test('while позволяет вычислить сумму последова�
   );
 });
 
-test('while поддерживает тело без фигурных скобок', () => {
+test('while supports body without braces', () => {
   assert.equal(
     evaluateScript(`
       let index = 0;
@@ -73,7 +73,7 @@ test('while поддерживает тело без фигурных скобо
   );
 });
 
-test('условие while вычисляется перед каждой итерацией', () => {
+test('while condition is evaluated before each iteration', () => {
   assert.equal(
     evaluateScript(`
       let remaining = 3;
@@ -89,7 +89,7 @@ test('условие while вычисляется перед каждой ите
   );
 });
 
-test('вложенные циклы имеют независимые цели переходов', () => {
+test('nested loops have independent jump targets', () => {
   assert.equal(
     evaluateScript(`
       let outer = 0;
@@ -112,7 +112,7 @@ test('вложенные циклы имеют независимые цели �
   );
 });
 
-test('блок цикла создаёт новые ячейки при каждой итерации', () => {
+test('loop block creates new bindings on each iteration', () => {
   assert.equal(
     evaluateScript(`
       let index = 0;
@@ -137,7 +137,7 @@ test('блок цикла создаёт новые ячейки при кажд
   );
 });
 
-test('объявление внутри тела цикла сохраняет TDZ', () => {
+test('declaration inside loop body preserves TDZ', () => {
   assert.throws(
     () => {
       runScript(`
@@ -156,7 +156,7 @@ test('объявление внутри тела цикла сохраняет T
   );
 });
 
-test('условие while использует правила истинности JavaScript', () => {
+test('while condition uses JavaScript truthiness rules', () => {
   for (const condition of ['0', '""', 'null', 'false']) {
     assert.equal(runScript(`while (${condition}) { 1n + 1; }`), undefined);
   }
@@ -177,7 +177,7 @@ test('условие while использует правила истиннос�
   );
 });
 
-test('break и continue разрешены внутри цикла', () => {
+test('break and continue are allowed inside loop', () => {
   assert.equal(
     runScript(`
       while (true) {
@@ -200,7 +200,7 @@ test('break и continue разрешены внутри цикла', () => {
   );
 });
 
-test('break завершает цикл и пропускает оставшееся тело', () => {
+test('break terminates loop and skips remaining body', () => {
   assert.equal(
     evaluateScript(`
       let index = 0;
@@ -225,7 +225,7 @@ test('break завершает цикл и пропускает оставшее
   assert.equal(runScript('while (true) { break; 1n + 1; }'), undefined);
 });
 
-test('continue пропускает остаток тела и возвращается к условию', () => {
+test('continue skips remainder of body and returns to condition', () => {
   assert.equal(
     evaluateScript(`
       let index = 0;
@@ -247,7 +247,7 @@ test('continue пропускает остаток тела и возвраща�
   );
 });
 
-test('break завершает только ближайший цикл', () => {
+test('break terminates only the nearest loop', () => {
   assert.equal(
     evaluateScript(`
       let outer = 0;
@@ -274,7 +274,7 @@ test('break завершает только ближайший цикл', () => 
   );
 });
 
-test('continue относится только к ближайшему циклу', () => {
+test('continue targets only the nearest loop', () => {
   assert.equal(
     evaluateScript(`
       let outer = 0;
@@ -301,7 +301,7 @@ test('continue относится только к ближайшему цикл�
   );
 });
 
-test('после вложенного цикла восстанавливается внешний контекст', () => {
+test('outer context is restored after nested loop', () => {
   assert.equal(
     evaluateScript(`
       let outer = 0;
@@ -331,7 +331,7 @@ test('после вложенного цикла восстанавливает�
   );
 });
 
-test('continue повторно создаёт ячейки блока на следующей итерации', () => {
+test('continue recreates block bindings on next iteration', () => {
   assert.equal(
     evaluateScript(`
       let index = 0;
@@ -362,7 +362,7 @@ test('continue повторно создаёт ячейки блока на сл
   );
 });
 
-test('метки поддерживают break и continue внешнего while', () => {
+test('labels support break and continue of outer while', () => {
   assert.equal(
     evaluateScript('var n=0; outer:while(true){n++;break outer;}n;'),
     1,
@@ -379,7 +379,7 @@ test('метки поддерживают break и continue внешнего whi
   );
 });
 
-test('бесконечный while останавливается тестовым лимитом', () => {
+test('infinite while loop stops on test step limit', () => {
   assert.throws(
     () => runScript('while (true) {}'),
     /Instruction limit exceeded: 10000/,

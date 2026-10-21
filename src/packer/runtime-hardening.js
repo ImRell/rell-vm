@@ -3,7 +3,6 @@ import { readFile } from 'node:fs/promises';
 import { resolve, relative, sep } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { parseAssembly } from '../assembly/parse.js';
-import { rewriteRuntimeInstructions } from './randomize-instructions.js';
 
 // Deliberately audited allowlist, NOT arbitrary public property mangling.
 // Never include descriptor keys/value/get/set, name/length/prototype, iterator
@@ -85,7 +84,7 @@ export function runtimePropertyOptions(enabled) {
 export function collectUsedOpcodes(source) {
   const used = new Set();
   function visit(text) {
-    for (const instruction of parseAssembly(text).instructions) {
+    for (const instruction of parseAssembly(text, { allowProtectedReferences: true }).instructions) {
       used.add(instruction.op);
       if (
         instruction.op === 'js.function.create' ||
@@ -152,54 +151,275 @@ function opcodeTests(node) {
   }
   return null;
 }
+import { OPCODES, OPCODE_NAMES, INSTRUCTION_SPECS } from '../bytecode/opcodes.js';
+
+function makeDecoy(id) {
+  const rand = Math.floor(Math.random() * 4);
+  const name = `_rell_vm_d${id}_${Math.random().toString(36).slice(2, 6)}`;
+  let body;
+  switch (rand) {
+    case 0:
+      body = `let r = (x * 31 + 17) ^ 0x5a5a; return (r >>> 3) | (r << 29);`;
+      break;
+    case 1:
+      body = `let acc = 0; for (let i = 0; i < 4; i++) { acc = (acc + (x ^ (i * 17))) & 0x7fffffff; } return acc;`;
+      break;
+    case 2:
+      body = `let v = (x ^ 0xdeadbeef) + 101; return v ^ (v >>> 16);`;
+      break;
+    default:
+      body = `let h = 0x811c9dc5; for (let i = 0; i < 3; i++) h = Math.imul(h ^ (x + i), 0x01000193); return h >>> 0;`;
+      break;
+  }
+  return {
+    name,
+    code: `function ${name}(x) { ${body} }`,
+  };
+}
+
+function shuffleFunctionNodes(statements, source, edits, anchorFnName = null, excludeNames = []) {
+  const funcs = [];
+  for (const stmt of statements) {
+    let fnName = null;
+    let targetStmt = null;
+    if (stmt.type === 'FunctionDeclaration') {
+      fnName = stmt.id ? stmt.id.name : null;
+      targetStmt = stmt;
+    } else if (
+      stmt.type === 'ExportNamedDeclaration' &&
+      stmt.declaration &&
+      stmt.declaration.type === 'FunctionDeclaration'
+    ) {
+      fnName = stmt.declaration.id ? stmt.declaration.id.name : null;
+      targetStmt = stmt;
+    }
+    if (targetStmt && fnName && !excludeNames.includes(fnName)) {
+      funcs.push({ node: targetStmt, name: fnName });
+    }
+  }
+  if (funcs.length < 2) return;
+
+  const texts = funcs.map((item) => source.slice(item.node.start, item.node.end));
+
+  const decoyCount = 1 + Math.floor(Math.random() * 2);
+  const decoys = [];
+  for (let d = 0; d < decoyCount; d++) {
+    decoys.push(makeDecoy(d));
+  }
+
+  for (let i = texts.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [texts[i], texts[j]] = [texts[j], texts[i]];
+  }
+
+  const decoyCodes = decoys.map((d) => d.code).join('\n');
+  const decoyCalls = decoys.map((d) => `if (Math.random() < 0) ${d.name}(0);`).join('\n');
+
+  let targetIdx = 0;
+  if (anchorFnName) {
+    const found = texts.findIndex(
+      (t) =>
+        t.includes(`function ${anchorFnName}`) ||
+        t.includes(`function* ${anchorFnName}`),
+    );
+    if (found !== -1) targetIdx = found;
+  }
+
+  const lastBrace = texts[targetIdx].lastIndexOf('}');
+  if (lastBrace !== -1) {
+    texts[targetIdx] =
+      texts[targetIdx].slice(0, lastBrace) +
+      '\n' +
+      decoyCalls +
+      '\n' +
+      texts[targetIdx].slice(lastBrace) +
+      '\n' +
+      decoyCodes;
+  } else {
+    texts[targetIdx] += '\n' + decoyCodes;
+  }
+
+  for (let i = 0; i < funcs.length; i++) {
+    edits.push([funcs[i].node.start, funcs[i].node.end, texts[i]]);
+  }
+}
+
 export function specializeRuntimeSource(
   source,
-  { filename, usedOpcodes, pruneOpcodes = true, maskErrors = true },
+  {
+    filename,
+    usedOpcodes,
+    pruneOpcodes = true,
+    maskErrors = true,
+    numericMapping = null,
+    shuffleHandlers = true,
+  },
 ) {
-  if (!pruneOpcodes && !maskErrors) return source;
+  if (!pruneOpcodes && !maskErrors && !numericMapping && !shuffleHandlers) return source;
   const ast = parseJavaScript(source, { sourceType: 'module' }),
     edits = [];
   const dispatcher =
-    filename === 'runtime/execute-assembly.js' ||
+    filename === 'runtime/execute-bytecode.js' ||
     filename === 'runtime/es5-operators.js';
+
+  if (shuffleHandlers && pruneOpcodes) {
+    if (filename === 'runtime/open-program.js') {
+      shuffleFunctionNodes(ast.program.body, source, edits, 'openProgramEnvelope');
+    } else if (filename === 'bytecode/binary-serializer.js') {
+      shuffleFunctionNodes(ast.program.body, source, edits, 'decodeBytecode');
+    } else if (filename === 'runtime/vm-function.js') {
+      shuffleFunctionNodes(ast.program.body, source, edits, 'attachVMFunction');
+    } else if (filename === 'runtime/execute-bytecode.js') {
+      walk(ast, (node) => {
+        if (
+          node.type === 'FunctionDeclaration' &&
+          node.id &&
+          node.id.name === 'executeBytecode' &&
+          node.body &&
+          Array.isArray(node.body.body)
+        ) {
+          shuffleFunctionNodes(node.body.body, source, edits, 'activate', ['runUntil']);
+        }
+      });
+    }
+  }
+
   walk(ast, (node) => {
     if (
-      pruneOpcodes &&
+      numericMapping &&
+      filename === 'runtime/execute-bytecode.js' &&
+      node.type === 'VariableDeclarator' &&
+      node.id.type === 'Identifier' &&
+      node.id.name === 'POPS_TABLE' &&
+      node.init.type === 'NewExpression'
+    ) {
+      const originalPops = new Array(Object.keys(OPCODES).length);
+      for (const [name, opcode] of Object.entries(OPCODES)) {
+        originalPops[opcode] = INSTRUCTION_SPECS[name]?.pops ?? 0;
+      }
+      const count = originalPops.length;
+      const shuffled = new Array(count);
+      for (let i = 0; i < count; i++) {
+        const target = numericMapping.get(i) ?? i;
+        shuffled[target] = originalPops[i];
+      }
+      edits.push([node.init.start, node.init.end, `new Uint8Array([${shuffled.join(',')}])`]);
+    }
+    if (
+      (pruneOpcodes || numericMapping || shuffleHandlers) &&
       dispatcher &&
       node.type === 'SwitchStatement' &&
       node.discriminant.type === 'Identifier' &&
       node.discriminant.name === 'op'
     ) {
-      let group = [];
-      for (const branch of node.cases) {
-        group.push(branch);
-        if (branch.consequent.length === 0) continue;
-        if (
-          group.every((c) => c.test === null || c.test.type === 'StringLiteral')
-        ) {
-          const kept = group.filter(
-            (c) => c.test === null || usedOpcodes.has(c.test.value),
-          );
-          if (kept.length !== group.length) {
-            const body = source.slice(branch.consequent[0].start, branch.end);
-            edits.push([
-              group[0].start,
-              branch.end,
-              kept.length
-                ? kept
-                    .map((c) =>
-                      c.test === null
-                        ? 'default:'
-                        : 'case ' + JSON.stringify(c.test.value) + ':',
-                    )
-                    .join('\n') +
-                  '\n' +
-                  body
-                : '',
-            ]);
+      if (shuffleHandlers && filename === 'runtime/execute-bytecode.js') {
+        let group = [];
+        const keptBlocks = [];
+        let defaultBlock = null;
+        for (const branch of node.cases) {
+          group.push(branch);
+          if (branch.consequent.length === 0) continue;
+          if (
+            group.every(
+              (c) =>
+                c.test === null ||
+                c.test.type === 'StringLiteral' ||
+                c.test.type === 'NumericLiteral',
+            )
+          ) {
+            const kept = group.filter((c) => {
+              if (c.test === null) return true;
+              if (!pruneOpcodes) return true;
+              if (c.test.type === 'NumericLiteral') {
+                const opName = OPCODE_NAMES[c.test.value];
+                return opName && usedOpcodes ? usedOpcodes.has(opName) : true;
+              }
+              return true;
+            });
+            if (kept.length > 0) {
+              const body = source.slice(branch.consequent[0].start, branch.end);
+              const isDefault = kept.some((c) => c.test === null);
+              const labels = kept
+                .map((c) => {
+                  if (c.test === null) return 'default:';
+                  const val = numericMapping
+                    ? (numericMapping.get(c.test.value) ?? c.test.value)
+                    : c.test.value;
+                  return 'case ' + val + ':';
+                })
+                .join('\n');
+              const blockText = labels + '\n' + body;
+              if (isDefault) {
+                defaultBlock = blockText;
+              } else {
+                keptBlocks.push(blockText);
+              }
+            }
           }
+          group = [];
         }
-        group = [];
+
+        // Fisher-Yates shuffle
+        for (let i = keptBlocks.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [keptBlocks[i], keptBlocks[j]] = [keptBlocks[j], keptBlocks[i]];
+        }
+
+        const allCases = [...keptBlocks, ...(defaultBlock ? [defaultBlock] : [])];
+        if (node.cases.length > 0) {
+          edits.push([node.cases[0].start, node.cases[node.cases.length - 1].end, allCases.join('\n')]);
+        }
+      } else {
+        let group = [];
+        for (const branch of node.cases) {
+          group.push(branch);
+          if (branch.consequent.length === 0) continue;
+          if (
+            group.every(
+              (c) =>
+                c.test === null ||
+                c.test.type === 'StringLiteral' ||
+                c.test.type === 'NumericLiteral',
+            )
+          ) {
+            const kept = group.filter((c) => {
+              if (c.test === null) return true;
+              if (!pruneOpcodes) return true;
+              if (c.test.type === 'StringLiteral') {
+                return usedOpcodes ? usedOpcodes.has(c.test.value) : true;
+              }
+              if (c.test.type === 'NumericLiteral') {
+                const opName = OPCODE_NAMES[c.test.value];
+                return opName && usedOpcodes ? usedOpcodes.has(opName) : true;
+              }
+              return true;
+            });
+            if (kept.length !== group.length || (numericMapping && filename === 'runtime/execute-bytecode.js')) {
+              const body = source.slice(branch.consequent[0].start, branch.end);
+              edits.push([
+                group[0].start,
+                branch.end,
+                kept.length
+                  ? kept
+                      .map((c) => {
+                        if (c.test === null) return 'default:';
+                        if (c.test.type === 'NumericLiteral') {
+                          const val = (numericMapping && filename === 'runtime/execute-bytecode.js')
+                            ? (numericMapping.get(c.test.value) ?? c.test.value)
+                            : c.test.value;
+                          return 'case ' + val + ':';
+                        }
+                        return 'case ' + JSON.stringify(c.test.value) + ':';
+                      })
+                      .join('\n') +
+                    '\n' +
+                    body
+                  : '',
+              ]);
+            }
+          }
+          group = [];
+        }
       }
     }
     if (
@@ -258,21 +478,24 @@ export function specializeRuntimeSource(
   // Pruning replacements preserve original bodies; mask again on a fresh AST
   // so no diagnostics survive merely because they were inside a kept case body.
   const result = applyEdits(source, edits);
-  if (pruneOpcodes && maskErrors)
+  if ((pruneOpcodes || shuffleHandlers) && maskErrors)
     return specializeRuntimeSource(result, {
       filename,
       usedOpcodes,
       pruneOpcodes: false,
       maskErrors: true,
+      numericMapping: null,
+      shuffleHandlers: false,
     });
   return result;
 }
 export function runtimeHardeningPlugin({
   sourceDirectory,
-  aliases,
+  numericMapping = null,
   usedOpcodes,
   pruneOpcodes,
   maskErrors,
+  shuffleHandlers = true,
 }) {
   const root = resolve(sourceDirectory);
   return {
@@ -282,7 +505,8 @@ export function runtimeHardeningPlugin({
         const filename = relative(root, path).split(sep).join('/');
         if (
           !filename.startsWith('runtime/') &&
-          !filename.startsWith('assembly/')
+          !filename.startsWith('assembly/') &&
+          !filename.startsWith('bytecode/')
         )
           return undefined;
         let contents = await readFile(path, 'utf8');
@@ -291,13 +515,15 @@ export function runtimeHardeningPlugin({
           usedOpcodes,
           pruneOpcodes,
           maskErrors,
+          numericMapping,
+          shuffleHandlers,
         });
-        if (aliases)
-          contents = rewriteRuntimeInstructions(
-            contents,
-            aliases,
-            filename === 'assembly/instructions.js',
+        if (numericMapping && filename === 'runtime/vm-function.js') {
+          contents = contents.replace(
+            /import\s*\{\s*parseAssembly\s*\}\s*from\s*['"]\.\.\/assembly\/parse\.js['"];/,
+            'const parseAssembly = () => { throw new TypeError("???"); };',
           );
+        }
         return { contents, loader: 'js' };
       });
     },

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { compileToAssembly } from '../src/compiler/compile-assembly.js';
-import { executeAssembly } from '../src/runtime/execute-assembly.js';
+import { executeAssembly } from './es5-test-helpers.js';
 import { compare } from './es5-test-helpers.js';
 const cases = [
   [
@@ -62,7 +62,7 @@ const cases = [
   ],
 ];
 for (const [name, source, expected] of cases)
-  test('оператор ' + name, () => {
+  test('operator ' + name, () => {
     const factory = (events) => ({
       missingCall() {
         events.push('call');
@@ -72,13 +72,13 @@ for (const [name, source, expected] of cases)
     assert.deepEqual(compare(source, factory).values, expected);
   });
 for (const operator of ['&=', '|=', '^=', '<<=', '>>=', '>>>=']) {
-  test('составное присваивание ' + operator + ' переменной', () => {
+  test('compound assignment ' + operator + ' to variable', () => {
     compare(`var x=12;capture(x ${operator} 2);capture(x);`);
   });
   test(
-    'составное присваивание ' +
+    'compound assignment ' +
       operator +
-      ' свойства и порядок getter/RHS/setter',
+      ' to property and getter/RHS/setter order',
     () => {
       const factory = (events) => {
         let value = 12;
@@ -106,41 +106,41 @@ for (const operator of ['&=', '|=', '^=', '<<=', '>>=', '>>>=']) {
     },
   );
 }
-test('составное присваивание читает старое значение до RHS', () => {
+test('compound assignment reads old value before RHS', () => {
   assert.deepEqual(
     compare('var x=8;capture(x<<=(x=2));capture(x);').values,
     [32, 32],
   );
 });
-test('составное присваивание const сохраняет runtime-ошибку', () => {
+test('compound assignment to const retains runtime error', () => {
   assert.equal(compare('const x=4;x|=1;').error.name, 'TypeError');
 });
-test('составное присваивание TDZ проверяется до RHS', () => {
+test('compound assignment TDZ is checked before RHS', () => {
   assert.equal(compare('x&=bad();let x;').error.name, 'ReferenceError');
 });
-test('операции BigInt сохраняют расширение существующего формата', () => {
+test('BigInt operations preserve format extensions', () => {
   compare(
     'capture(6n&3n);capture(2n<<3n);capture(~2n);capture(2n=="2");capture(2n===2);',
   );
 });
-test('>>> с BigInt, unary+ BigInt и смешанная арифметика бросают', () => {
+test('>>> with BigInt, unary+ BigInt and mixed arithmetic throw', () => {
   for (const expr of ['1n>>>0n', '+1n', '1n&1', '1n-1'])
     assert.equal(compare(`capture(${expr});`).error.name, 'TypeError');
 });
-test('Symbol не приводится к числу неявно', () => {
+test('Symbol is not implicitly coerced to number', () => {
   for (const expr of ['+symbol', 'symbol|0', 'symbol+"x"', '-symbol'])
     assert.equal(
       compare(`capture(${expr});`, () => ({ symbol: Symbol('s') })).error.name,
       'TypeError',
     );
 });
-test('in принимает Symbol key без строкового преобразования', () => {
+test('in operator accepts Symbol key without string coercion', () => {
   compare('capture(key in object);', () => {
     const key = Symbol('x');
     return { key, object: { [key]: 1 } };
   });
 });
-test('in проверяет тип RHS до key coercion', () => {
+test('in operator checks RHS type before key coercion', () => {
   const factory = (events) => ({
     key: {
       toString() {
@@ -153,7 +153,7 @@ test('in проверяет тип RHS до key coercion', () => {
   assert.equal(result.error.name, 'TypeError');
   assert.deepEqual(result.events, []);
 });
-test('in преобразует VM-ключ через string hint', () => {
+test('in operator coerces VM key via string hint', () => {
   assert.deepEqual(
     compare(
       'var k={toString:function(){capture("key");return "x";}};capture(k in {x:1});',
@@ -161,7 +161,7 @@ test('in преобразует VM-ключ через string hint', () => {
     ['key', true],
   );
 });
-test('instanceof проверяет обычные внешние конструкторы и custom hasInstance', () => {
+test('instanceof checks ordinary external constructors and custom hasInstance', () => {
   compare('capture(object instanceof Constructor);', () => {
     function Constructor() {}
     return { Constructor, object: Object.create(Constructor.prototype) };
@@ -175,14 +175,14 @@ test('instanceof проверяет обычные внешние констру
     },
   }));
 });
-test('instanceof некорректного RHS сохраняет native TypeError', () => {
+test('instanceof invalid RHS retains native TypeError', () => {
   for (const rhs of ['null', '1', '{}'])
     assert.equal(
       compare(`capture({} instanceof ${rhs});`).error.name,
       'TypeError',
     );
 });
-test('instanceof VM-конструктора использует его prototype', () => {
+test('instanceof on VM constructor uses its prototype', () => {
   const values = [];
   executeAssembly(
     compileToAssembly(
@@ -198,7 +198,7 @@ test('instanceof VM-конструктора использует его prototy
   );
   assert.deepEqual(values, [true, false, false]);
 });
-test('новые операторы не включают современный неподдержанный синтаксис', () => {
+test('new operators do not include modern unsupported syntax', () => {
   for (const source of [
     'capture(2**3);',
     'var x=0;x||=1;',
@@ -206,7 +206,7 @@ test('новые операторы не включают современный
   ])
     assert.throws(() => compileToAssembly(source), SyntaxError);
 });
-test('операторы дают строку собственных инструкций', () => {
+test('operators produce valid bytecode instructions', () => {
   const text = compileToAssembly('var x=1;x<<=2;capture(x!=2);capture(+x);');
   for (const op of ['js.shl', 'js.ne', 'js.pos']) assert.ok(text.includes(op));
 });

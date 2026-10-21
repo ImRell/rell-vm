@@ -29,7 +29,7 @@ Examples:
 `.trim();
 
 /**
- * Разбирает аргументы без обращения к process.argv и файловой системе.
+ * Parses arguments without accessing process.argv or the filesystem.
  *
  * @param {string[]} args
  * @returns {

@@ -1,11 +1,11 @@
 /**
- * Ячейка лексической переменной let или const.
+ * Lexical variable cell for let or const bindings.
  *
- * Состояния:
- * 1. Создана, но не инициализирована — TDZ.
- * 2. Инициализирована — доступна для чтения.
+ * States:
+ * 1. Created, uninitialized — TDZ.
+ * 2. Initialized — readable and mutable (if let).
  *
- * Инициализация и последующее присваивание — разные операции.
+ * Initialization and subsequent assignment are distinct operations.
  */
 export class LexicalCell {
   #name;
@@ -31,7 +31,7 @@ export class LexicalCell {
   }
 
   /**
-   * Первичная инициализация при исполнении объявления.
+   * Initial declaration binding initialization.
    *
    * @param {unknown} value
    * @returns {void}
@@ -57,7 +57,7 @@ export class LexicalCell {
   }
 
   /**
-   * Присваивает новое значение и возвращает его.
+   * Assigns a new value and returns it.
    *
    * @param {unknown} value
    * @returns {unknown}

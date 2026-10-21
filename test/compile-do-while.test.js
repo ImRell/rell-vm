@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { compileToAssembly } from '../src/compiler/compile-assembly.js';
-import { executeAssembly } from '../src/runtime/execute-assembly.js';
+import { executeAssembly } from './es5-test-helpers.js';
 function compare(source, factory = () => ({})) {
   function outcome(native) {
     const values = [],
@@ -33,16 +33,16 @@ function compare(source, factory = () => ({})) {
   assert.deepEqual(actual, outcome(true));
   return actual;
 }
-test('do while false исполняет тело один раз', () => {
+test('do while false executes body once', () => {
   assert.deepEqual(
     compare('var n=0;do{n++;}while(false);capture(n);').values,
     [1],
   );
 });
-test('do while повторяет тело до ложного условия', () => {
+test('do while repeats body until falsy condition', () => {
   compare('var i=0,sum=0;do{sum+=i++;}while(i<4);capture(sum);capture(i);');
 });
-test('body предшествует каждому test', () => {
+test('body precedes each condition test', () => {
   const factory = (events) => {
     let n = 0;
     return {
@@ -63,22 +63,22 @@ test('body предшествует каждому test', () => {
     'test:2',
   ]);
 });
-test('continue переходит к условию, не к началу тела', () => {
+test('continue jumps to condition, not to start of body', () => {
   compare('var i=0;do{i++;continue;}while(i<3);capture(i);');
 });
-test('continue при ложном условии завершает цикл', () => {
+test('continue on false condition terminates loop', () => {
   compare('var i=0;do{i++;continue;}while(false);capture(i);');
 });
-test('break пропускает условие', () => {
+test('break skips condition', () => {
   compare('var i=0;do{i++;break;}while(missing());capture(i);');
 });
-test('do while без фигурных скобок', () => {
+test('do while without curly braces', () => {
   compare('var i=0;do i++;while(i<3);capture(i);');
 });
-test('do while с пустым телом', () => {
+test('do while with empty body', () => {
   compare('var i=0;do;while(i++<2);capture(i);');
 });
-test('условие использует truthiness', () => {
+test('condition uses truthiness', () => {
   for (const condition of ['false', '0', '""', 'null', 'undefined', 'NaN'])
     assert.deepEqual(
       compare(`var n=0;do{n++;}while(${condition});capture(n);`).values,
@@ -91,16 +91,16 @@ test('условие использует truthiness', () => {
       [2],
     );
 });
-test('var body поднят до первой итерации', () => {
+test('body var is hoisted before first iteration', () => {
   compare('capture(value);do{var value=42;}while(false);capture(value);');
 });
-test('var из недостижимого do while тоже объявлен', () => {
+test('var from unreachable do while is also declared', () => {
   compare('if(false){do{var hidden=42;}while(false);}capture(hidden);');
 });
-test('возврат пропускает condition', () => {
+test('return skips condition', () => {
   compare('function f(){do{return 42;}while(missing());}capture(f());');
 });
-test('исключение в body пропускает condition и сохраняет идентичность', () => {
+test('exception in body skips condition and preserves identity', () => {
   const error = {},
     events = [];
   assert.throws(
@@ -120,7 +120,7 @@ test('исключение в body пропускает condition и сохра�
   );
   assert.deepEqual(events, []);
 });
-test('исключение в condition идёт после body', () => {
+test('exception in condition occurs after body', () => {
   const error = {},
     events = [];
   assert.throws(
@@ -139,37 +139,35 @@ test('исключение в condition идёт после body', () => {
   );
   assert.deepEqual(events, ['body']);
 });
-test('comma в do condition выполняет все выражения', () => {
+test('comma in do condition evaluates all expressions', () => {
   compare(
     'var i=0,count=0;do{i++;}while(count++,i<3);capture(count);capture(i);',
   );
 });
-test('do while внутри функции может работать с arguments', () => {
+test('do while inside function works with arguments', () => {
   compare(
     'function f(a){do{arguments[0]++;}while(a<3);return a;}capture(f(0));',
   );
 });
-test('do while внутри getter использует правильный frame', () => {
+test('do while inside getter uses correct frame', () => {
   compare(
     'var o={get x(){var n=0;do{n++;}while(n<3);return n;}};capture(100+o.x);',
   );
 });
-test('бесконечный do while останавливается общим лимитом', () => {
+test('infinite do while stops at global step limit', () => {
   for (const source of ['do{}while(true);', 'do{continue;}while(true);'])
     assert.throws(
       () => executeAssembly(compileToAssembly(source), { maxSteps: 100 }),
       /Instruction limit exceeded: 100/,
     );
 });
-test('синтаксис condition проверяется даже после безусловного break', () => {
+test('condition syntax is checked even after unconditional break', () => {
   assert.throws(
     () => compileToAssembly('do{break;}while(x => x);'),
     /Unsupported expression: ArrowFunctionExpression/,
   );
 });
-test('компиляция do while не выполняет body и condition', () => {
-  assert.equal(
-    typeof compileToAssembly('do{missing();}while(other());'),
-    'string',
-  );
+test('compiling do while does not evaluate body or condition', () => {
+  const result = compileToAssembly('do{missing();}while(other());');
+  assert.ok(typeof result === 'string' || result instanceof String);
 });

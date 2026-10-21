@@ -63,7 +63,7 @@ function compare(operation, strict = false) {
   );
 }
 
-test('создаёт не-массив с индексами, length и Arguments brand', () => {
+test('creates non-array with indices, length and Arguments brand', () => {
   const { object } = make();
   assert.equal(Array.isArray(object), false);
   assert.equal(Object.getPrototypeOf(object), Object.prototype);
@@ -79,7 +79,7 @@ test('создаёт не-массив с индексами, length и Argument
   });
 });
 
-test('length учитывает лишние аргументы, отсутствующие индексы не создаются', () => {
+test('length accounts for extra arguments, missing indices are not created', () => {
   const { object } = make([1, 2, 3], ['a']);
   assert.equal(object.length, 3);
   assert.equal(object[2], 3);
@@ -90,7 +90,7 @@ test('length учитывает лишние аргументы, отсутст�
   assert.equal(Object.hasOwn(empty.object, '0'), false);
 });
 
-test('изменение параметра отражается в значении и дескрипторе индекса', () => {
+test('parameter mutation is reflected in value and descriptor of index', () => {
   compare((pair) => {
     pair.set('a', 42);
     return [
@@ -100,14 +100,14 @@ test('изменение параметра отражается в значен
   });
 });
 
-test('прямая запись индекса изменяет параметр в нестрогом режиме', () => {
+test('direct index assignment mutates parameter in sloppy mode', () => {
   compare((pair) => {
     pair.object[0] = 42;
     return [pair.get('a'), pair.object[0]];
   });
 });
 
-test('строгие аргументы не связаны с параметрами в обе стороны', () => {
+test('strict arguments are not mapped to parameters in both directions', () => {
   compare((pair) => {
     pair.set('a', 42);
     pair.object[1] = 99;
@@ -115,7 +115,7 @@ test('строгие аргументы не связаны с параметр�
   }, true);
 });
 
-test('повторные параметры связывают только последнее вхождение', () => {
+test('duplicate parameters bind only the last occurrence', () => {
   const pair = make([10, 20], ['a', 'a']);
   pair.set('a', 42);
   assert.equal(pair.object[0], 10);
@@ -126,7 +126,7 @@ test('повторные параметры связывают только по
   assert.equal(pair.get('a'), 200);
 });
 
-test('отсутствующий последний дубликат не связывает ранний аргумент', () => {
+test('missing last duplicate does not bind earlier argument', () => {
   const pair = make([10], ['a', 'a']);
   assert.equal(pair.get('a'), undefined);
   pair.set('a', 42);
@@ -135,14 +135,14 @@ test('отсутствующий последний дубликат не свя
   assert.equal(pair.get('a'), 42);
 });
 
-test('defineProperty с value обновляет параметр', () => {
+test('defineProperty with value updates parameter', () => {
   compare((pair) => {
     Object.defineProperty(pair.object, '0', { value: 42 });
     return [pair.get('a'), pair.object[0]];
   });
 });
 
-test('writable false без value сохраняет текущий параметр и разрывает связь', () => {
+test('writable false without value keeps current parameter and unmaps it', () => {
   compare((pair) => {
     pair.set('a', 42);
     Object.defineProperty(pair.object, '0', { writable: false });
@@ -155,7 +155,7 @@ test('writable false без value сохраняет текущий параме
   });
 });
 
-test('value и writable false сначала обновляют параметр, затем разрывают связь', () => {
+test('value and writable false first update parameter, then unmap', () => {
   compare((pair) => {
     Object.defineProperty(pair.object, '0', { value: 42, writable: false });
     const first = pair.get('a');
@@ -164,7 +164,7 @@ test('value и writable false сначала обновляют параметр
   });
 });
 
-test('переход к accessor разрывает связь, не изменяя параметр', () => {
+test('transition to accessor unmaps without mutating parameter', () => {
   compare((pair) => {
     Object.defineProperty(pair.object, '0', {
       get() {
@@ -177,7 +177,7 @@ test('переход к accessor разрывает связь, не измен�
   });
 });
 
-test('изменение enumerable не разрывает связь', () => {
+test('changing enumerable does not unmap', () => {
   compare((pair) => {
     Object.defineProperty(pair.object, '0', { enumerable: false });
     pair.set('a', 42);
@@ -185,7 +185,7 @@ test('изменение enumerable не разрывает связь', () => {
   });
 });
 
-test('delete и последующее создание индекса не восстанавливают связь', () => {
+test('delete and subsequent index recreation do not restore mapping', () => {
   compare((pair) => {
     assert.equal(Reflect.deleteProperty(pair.object, '0'), true);
     pair.object[0] = 42;
@@ -193,7 +193,7 @@ test('delete и последующее создание индекса не во
   });
 });
 
-test('неуспешное удаление сохраняет связь', () => {
+test('failed deletion retains mapping', () => {
   compare((pair) => {
     Object.defineProperty(pair.object, '0', { configurable: false });
     const deleted = Reflect.deleteProperty(pair.object, '0');
@@ -202,7 +202,7 @@ test('неуспешное удаление сохраняет связь', () =
   });
 });
 
-test('неуспешный defineProperty сохраняет связь и значение параметра', () => {
+test('failed defineProperty retains mapping and parameter value', () => {
   compare((pair) => {
     Object.defineProperty(pair.object, '0', { configurable: false });
     const result = Reflect.defineProperty(pair.object, '0', {
@@ -215,7 +215,7 @@ test('неуспешный defineProperty сохраняет связь и зн�
   });
 });
 
-test('freeze сохраняет текущие значения и разрывает отображение', () => {
+test('freeze preserves current values and unmaps', () => {
   compare((pair) => {
     pair.set('a', 42);
     Object.freeze(pair.object);
@@ -224,7 +224,7 @@ test('freeze сохраняет текущие значения и разрыв�
   });
 });
 
-test('seal и preventExtensions не разрывают отображение', () => {
+test('seal and preventExtensions do not unmap', () => {
   for (const operation of [Object.seal, Object.preventExtensions]) {
     compare((pair) => {
       operation(pair.object);
@@ -235,7 +235,7 @@ test('seal и preventExtensions не разрывают отображение',
   }
 });
 
-test('Reflect.set с другим receiver не меняет исходный параметр', () => {
+test('Reflect.set with different receiver does not mutate original parameter', () => {
   compare((pair) => {
     const receiver = {};
     const success = Reflect.set(pair.object, '0', 42, receiver);
@@ -243,7 +243,7 @@ test('Reflect.set с другим receiver не меняет исходный п
   });
 });
 
-test('нестрогий callee доступен, строгие callee и caller запрещены по ES5', () => {
+test('sloppy callee is accessible, strict callee and caller throw per ES5', () => {
   const pair = make();
   assert.equal(pair.object.callee, pair.callee);
   assert.deepEqual(Object.getOwnPropertyDescriptor(pair.object, 'callee'), {
@@ -265,7 +265,7 @@ test('нестрогий callee доступен, строгие callee и calle
   }
 });
 
-test('проверяет входные данные и сохраняет объектные аргументы по ссылке', () => {
+test('validates input arguments and preserves object arguments by reference', () => {
   const original = { value: 10 };
   const pair = make([original], ['a']);
   original.value = 42;

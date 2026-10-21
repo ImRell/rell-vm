@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { compileToAssembly } from '../src/compiler/compile-assembly.js';
-import { executeAssembly } from '../src/runtime/execute-assembly.js';
+import { assembleTextToBytecode } from '../src/bytecode/assemble.js';
+import { executeBytecode } from '../src/runtime/execute-bytecode.js';
 export function outcome(source, factory = () => ({}), native = false) {
   const values = [],
     events = [];
@@ -39,11 +40,13 @@ export function outcome(source, factory = () => ({}), native = false) {
     thrown = false;
   try {
     if (native) vm.runInNewContext(source, environment, { timeout: 1000 });
-    else
-      executeAssembly(compileToAssembly(source), {
+    else {
+      const bytecode = assembleTextToBytecode(compileToAssembly(source));
+      executeBytecode(bytecode, {
         environment,
         maxSteps: 200000,
       });
+    }
   } catch (e) {
     thrown = true;
     error =
@@ -58,4 +61,12 @@ export function compare(source, factory) {
     expected = outcome(source, factory, true);
   assert.deepEqual(actual, expected);
   return actual;
+}
+
+export function executeAssembly(source, options = {}) {
+  const bytecode =
+    typeof source === 'string' && !source.code
+      ? assembleTextToBytecode(source)
+      : source;
+  return executeBytecode(bytecode, options);
 }

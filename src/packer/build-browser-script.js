@@ -1,16 +1,20 @@
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 import {
-  createInstructionAliases,
-  relabelAssembly,
-} from './randomize-instructions.js';
-import {
   collectUsedOpcodes,
   runtimeHardeningPlugin,
   runtimePropertyOptions,
 } from './runtime-hardening.js';
 import { protectAssemblyStrings } from './protect-strings.js';
 import { sealProgram } from './seal-program.js';
+import { createStringDecoder } from '../runtime/string-decoder.js';
+import { assembleTextToBytecode } from '../bytecode/assemble.js';
+import { encodeBytecode } from '../bytecode/binary-serializer.js';
+import {
+  createNumericOpcodeAliases,
+  remapBytecodeProgram,
+  collectUsedOpcodesFromBytecode,
+} from '../bytecode/polymorphic.js';
 
 import { mangleAssemblyNames } from '../assembly/mangle-names.js';
 import { parseAssembly } from '../assembly/parse.js';
@@ -18,10 +22,10 @@ import { parseAssembly } from '../assembly/parse.js';
 const SOURCE_DIRECTORY = fileURLToPath(new URL('../', import.meta.url));
 
 /**
- * Объединяет текст инструкций и текстовый runtime
- * в самостоятельный браузерный скрипт.
+ * Combines instruction text and VM runtime
+ * into a standalone browser script.
  *
- * Не выполняет программу и не записывает файлы.
+ * Does not execute the program and does not write files.
  *
  * @param {string} assembly
  * @param {{ minify?: boolean, mangleNames?: boolean, keepFunctionNames?: boolean, encryptProgram?: boolean, exposeFunctionMetadata?: boolean, randomizeInstructions?: boolean, mangleProperties?: boolean, pruneOpcodes?: boolean, maskErrors?: boolean, protectStrings?: boolean }} [options]
@@ -40,6 +44,7 @@ export async function buildBrowserScript(
     pruneOpcodes = true,
     maskErrors = true,
     protectStrings = true,
+    shuffleHandlers = true,
   } = {},
 ) {
   for (const [name, value] of Object.entries({
@@ -47,6 +52,7 @@ export async function buildBrowserScript(
     pruneOpcodes,
     maskErrors,
     protectStrings,
+    shuffleHandlers,
   }))
     if (typeof value !== 'boolean')
       throw new TypeError(name + ' must be a boolean');
@@ -66,22 +72,17 @@ export async function buildBrowserScript(
     throw new TypeError('keepFunctionNames must be a boolean');
   if (keepFunctionNames && !mangleNames)
     throw new TypeError('keepFunctionNames requires mangleNames');
-
-  // Проверяем текст до упаковки.
-  // Подготовленные объекты не встраиваем:
-  // входом браузерной VM останется строка.
+  // Validate source before bundling.
   let program = mangleNames
     ? mangleAssemblyNames(assembly, { keepFunctionNames })
     : assembly;
   if (!mangleNames) parseAssembly(program);
 
   const usedOpcodes = collectUsedOpcodes(program);
-  const aliases = randomizeInstructions ? createInstructionAliases() : null;
-  if (aliases) program = relabelAssembly(program, aliases);
 
   let stringEntries;
   if (protectStrings) {
-    const protectedProgram = protectAssemblyStrings(program, aliases);
+    const protectedProgram = protectAssemblyStrings(program);
     program = protectedProgram.program;
     stringEntries = protectedProgram.entries;
   }
@@ -90,29 +91,52 @@ export async function buildBrowserScript(
       JSON.stringify(stringEntries).replace(/</g, '\\u003c') +
       '),'
     : '';
-  const embeddedSource = JSON.stringify(
-    encryptProgram ? sealProgram(program) : program,
-  )
-    .replace(/</g, '\\u003c')
-    .replace(/\u2028/g, '\\u2028')
-    .replace(/\u2029/g, '\\u2029');
+
+  const buildTimeDecoder = protectStrings
+    ? createStringDecoder(stringEntries)
+    : null;
+
+  const bytecode = assembleTextToBytecode(program, {
+    decodeString: buildTimeDecoder,
+  });
+  collectUsedOpcodesFromBytecode(bytecode, usedOpcodes);
+  const numericMapping = randomizeInstructions ? createNumericOpcodeAliases() : null;
+
+  let stdinContents;
+  if (encryptProgram) {
+    const remapped = numericMapping ? remapBytecodeProgram(bytecode, numericMapping) : bytecode;
+    const sealedChildren = sealNestedBytecodes(remapped);
+    const binaryBytes = encodeBytecode(sealedChildren);
+    const sealed = sealProgram(binaryBytes);
+    const embeddedSource = JSON.stringify(sealed)
+      .replace(/</g, '\\u003c')
+      .replace(/\u2028/g, '\\u2028')
+      .replace(/\u2029/g, '\\u2029');
+
+    stdinContents = [
+      'import { executeBytecode } from "./runtime/execute-bytecode.js";',
+      ...(protectStrings
+        ? ['import { createStringDecoder } from "./runtime/string-decoder.js";']
+        : []),
+      'import { openProgramEnvelope } from "./runtime/open-program.js";',
+      `executeBytecode(openProgramEnvelope(${embeddedSource}), {${decoderSource}exposeFunctionMetadata: ${exposeFunctionMetadata}});`,
+    ].join('\n');
+  } else {
+    const programObj = numericMapping ? remapBytecodeProgram(bytecode, numericMapping) : bytecode;
+    const embeddedObj = `{version:${programObj.version},constants:${serializeConstantsForScript(programObj.constants)},code:new Uint8Array([${Array.from(programObj.code).join(',')}])}`;
+
+    stdinContents = [
+      'import { executeBytecode } from "./runtime/execute-bytecode.js";',
+      ...(protectStrings
+        ? ['import { createStringDecoder } from "./runtime/string-decoder.js";']
+        : []),
+      `executeBytecode(${embeddedObj}, {${decoderSource}exposeFunctionMetadata: ${exposeFunctionMetadata}});`,
+    ].join('\n');
+  }
 
   const result = await build({
     stdin: {
-      contents: [
-        'import { executeAssembly } from "./runtime/execute-assembly.js";',
-        ...(protectStrings
-          ? [
-              'import { createStringDecoder } from "./runtime/string-decoder.js";',
-            ]
-          : []),
-        ...(encryptProgram
-          ? ['import { openProgramEnvelope } from "./runtime/open-program.js";']
-          : []),
-        encryptProgram
-          ? `executeAssembly(openProgramEnvelope(${embeddedSource}), {${decoderSource}exposeFunctionMetadata: ${exposeFunctionMetadata}});`
-          : `executeAssembly(${embeddedSource}, {${decoderSource}exposeFunctionMetadata: ${exposeFunctionMetadata}});`,
-      ].join('\n'),
+      contents: stdinContents,
       resolveDir: SOURCE_DIRECTORY,
       sourcefile: 'jsvm-entry.js',
       loader: 'js',
@@ -121,10 +145,11 @@ export async function buildBrowserScript(
     plugins: [
       runtimeHardeningPlugin({
         sourceDirectory: SOURCE_DIRECTORY,
-        aliases,
+        numericMapping,
         usedOpcodes,
         pruneOpcodes,
         maskErrors,
+        shuffleHandlers,
       }),
     ],
     ...runtimePropertyOptions(mangleProperties && !exposeFunctionMetadata),
@@ -149,3 +174,43 @@ export async function buildBrowserScript(
 
   return result.outputFiles[0].text;
 }
+
+function serializeConstantsForScript(constants) {
+  const parts = constants.map((val) => {
+    if (val === null) return 'null';
+    if (val === undefined) return 'undefined';
+    if (typeof val === 'number') {
+      return Object.is(val, -0) ? '-0' : String(val);
+    }
+    if (typeof val === 'boolean') return String(val);
+    if (typeof val === 'string') {
+      return JSON.stringify(val).replace(/</g, '\\u003c');
+    }
+    if (typeof val === 'bigint') return `${val}n`;
+    if (Array.isArray(val)) return JSON.stringify(val);
+    if (val && val.code instanceof Uint8Array) {
+      return `{version:${val.version},constants:${serializeConstantsForScript(val.constants)},code:new Uint8Array([${Array.from(val.code).join(',')}])}`;
+    }
+    return JSON.stringify(val);
+  });
+  return `[${parts.join(',')}]`;
+}
+
+function sealNestedBytecodes(program) {
+  if (!program || !Array.isArray(program.constants)) return program;
+  const newConstants = program.constants.map((val) => {
+    if (val && val.code instanceof Uint8Array) {
+      const childWithSealedChildren = sealNestedBytecodes(val);
+      const childBytes = encodeBytecode(childWithSealedChildren);
+      return sealProgram(childBytes);
+    }
+    return val;
+  });
+  return {
+    version: program.version,
+    code: program.code,
+    constants: newConstants,
+    instructions: program.instructions,
+  };
+}
+

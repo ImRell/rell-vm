@@ -1,15 +1,15 @@
 /**
- * Разбивает текст инструкций на непустые строки с токенами.
+ * Tokenizes assembly source into non-empty lines with tokens.
  *
- * Номера строк и столбцов начинаются с 1.
- * Столбцы считаются в UTF-16 кодовых единицах, как индексы JS-строк.
+ * Line and column numbers are 1-based.
+ * Columns are measured in UTF-16 code units, matching JS string indices.
  *
- * Поддерживаются:
- * - переводы строк LF, CRLF и CR;
- * - пробелы и табуляции между токенами;
- * - строки в двойных кавычках с JSON-экранированием.
+ * Supported features:
+ * - Line breaks: LF, CRLF, and CR;
+ * - Spaces and tabs between tokens;
+ * - Double-quoted strings with JSON escape sequences.
  *
- * Комментарии пока не поддерживаются.
+ * Comments are not yet supported.
  *
  * @param {string} source
  * @returns {Array<{
@@ -22,11 +22,12 @@
  * }>}
  */
 export function tokenizeAssembly(source) {
-  if (typeof source !== 'string') {
+  if (typeof source !== 'string' && !(source instanceof String)) {
     throw new TypeError('Assembly source must be a string');
   }
 
-  const lines = source.split(/\r\n|\n|\r/);
+  const str = String(source);
+  const lines = str.split(/\r\n|\n|\r/);
   const result = [];
 
   for (let index = 0; index < lines.length; index++) {
@@ -64,8 +65,8 @@ function tokenizeLine(text, lineNumber) {
         const character = text[position];
 
         if (character === '\\') {
-          // Пропускаем экранированный символ.
-          // Корректность escape-последовательности проверит JSON.parse.
+          // Skip escaped character.
+          // Escape sequence validity will be checked by JSON.parse.
           position += 2;
           continue;
         }

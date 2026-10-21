@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { compileToAssembly } from '../src/compiler/compile-assembly.js';
-import { executeAssembly } from '../src/runtime/execute-assembly.js';
+import { executeAssembly } from './es5-test-helpers.js';
 
 function outcome(source, factory = () => ({}), native = false) {
   const values = [],
@@ -30,14 +30,14 @@ function compare(source, factory) {
 }
 const objectFactory = () => ({ object: { x: 10 }, key: 'x' });
 
-test('статические и вычисляемые записи возвращают RHS', () => {
+test('static and computed property writes return RHS', () => {
   const result = compare(
     'capture(object.x = 42); capture(object[key] = 7); capture(object.x);',
     objectFactory,
   );
   assert.deepEqual(result.values, [42, 7, 7]);
 });
-test('цепочки присваиваний и внешний стек сохраняются', () => {
+test('assignment chains and outer stack are preserved', () => {
   assert.deepEqual(
     compare(
       'capture(100 + (object.x = object.y = 7));capture(object.x + object.y);',
@@ -46,11 +46,11 @@ test('цепочки присваиваний и внешний стек сох�
     [107, 14],
   );
 });
-test('составные арифметические присваивания сохраняют результаты', () => {
+test('compound arithmetic assignments preserve results', () => {
   for (const op of ['+=', '-=', '*=', '/=', '%='])
     compare(`capture(object[key] ${op} 3); capture(object.x);`, objectFactory);
 });
-test('составная запись сохраняет string и BigInt семантику', () => {
+test('compound write preserves string and BigInt semantics', () => {
   assert.deepEqual(
     compare('capture(object.x += "2"); capture(big.x *= 3n);', () => ({
       object: { x: 1 },
@@ -94,19 +94,19 @@ function observable(events) {
     },
   };
 }
-test('простая запись вычисляет base и ключ один раз, RHS перед ToPropertyKey', () => {
+test('simple write evaluates base and key once, RHS before ToPropertyKey', () => {
   assert.deepEqual(
     compare('capture(base()[keyExpr()] = rhs());', observable).events,
     ['base', 'key-expr', 'rhs', 'convert-key', 'set:2'],
   );
 });
-test('составная запись читает до RHS и преобразует сырой ключ при get и set', () => {
+test('compound write reads before RHS and converts raw key during get and set', () => {
   assert.deepEqual(
     compare('capture(base()[keyExpr()] += rhs());', observable).events,
     ['base', 'key-expr', 'convert-key', 'get', 'rhs', 'convert-key', 'set:12'],
   );
 });
-test('повторное преобразование ключа может выбрать другое свойство', () => {
+test('repeated key conversion can select different property', () => {
   const factory = () => {
     let n = 0;
     return {
@@ -126,7 +126,7 @@ test('повторное преобразование ключа может вы
     [12, 10, 12],
   );
 });
-test('старое значение читается до правой части', () => {
+test('old value is read before right-hand side', () => {
   assert.deepEqual(
     compare(
       'capture(object.x += (object.x = 3));capture(object.x);',
@@ -135,7 +135,7 @@ test('старое значение читается до правой част�
     [13, 13],
   );
 });
-test('преобразование старого значения в число выполняется после RHS', () => {
+test('conversion of old value to number executes after RHS', () => {
   const factory = (events) => ({
     object: {
       x: {
@@ -155,10 +155,10 @@ test('преобразование старого значения в число
     'valueOf',
   ]);
 });
-test('простая запись не вызывает getter', () => {
+test('simple write does not invoke getter', () => {
   assert.deepEqual(compare('object.x = 2;', observable).events, ['set:2']);
 });
-test('для null простая запись выполняет RHS, составная — нет', () => {
+test('for null simple write evaluates RHS, compound write does not', () => {
   const factory = (events) => ({
     object: null,
     keyExpr() {
@@ -186,7 +186,7 @@ test('для null простая запись выполняет RHS, соста
     error: 'TypeError',
   });
 });
-test('ошибка RHS предшествует ошибке записи в null', () => {
+test('RHS error precedes error on writing to null', () => {
   const error = {};
   assert.throws(
     () =>
@@ -201,7 +201,7 @@ test('ошибка RHS предшествует ошибке записи в nul
     (e) => e === error,
   );
 });
-test('readonly и nonextensible учитывают строгий режим', () => {
+test('readonly and nonextensible respect strict mode', () => {
   for (const factory of [
     () => ({ object: Object.freeze({ x: 1 }) }),
     () => ({ object: Object.preventExtensions({}) }),
@@ -213,7 +213,7 @@ test('readonly и nonextensible учитывают строгий режим', (
     );
   }
 });
-test('строгость наследуется вложенными функциями', () => {
+test('strictness is inherited by nested functions', () => {
   assert.equal(
     compare('"use strict";function f(){object.x=2;}f();', () => ({
       object: Object.freeze({ x: 1 }),
@@ -227,13 +227,13 @@ test('строгость наследуется вложенными функц�
     'TypeError',
   );
 });
-test('строгость вызывающего кода не меняет sloppy функцию', () => {
+test('caller strictness does not alter sloppy function', () => {
   compare(
     'function f(){object.x=2;return 7;}function g(){"use strict";return f();}capture(g());',
     () => ({ object: Object.freeze({ x: 1 }) }),
   );
 });
-test('запись в примитивы соответствует sloppy и strict режиму', () => {
+test('writing to primitives matches sloppy and strict mode', () => {
   for (const base of [1, true, 'abc', 1n]) {
     compare('capture(object.x=42);', () => ({ object: base }));
     assert.equal(
@@ -242,7 +242,7 @@ test('запись в примитивы соответствует sloppy и st
     );
   }
 });
-test('Proxy получает исходный receiver и результат RHS', () => {
+test('Proxy receives original receiver and RHS result', () => {
   const factory = (events) => {
     let object;
     object = new Proxy(
@@ -262,7 +262,7 @@ test('Proxy получает исходный receiver и результат RHS
     'TypeError',
   );
 });
-test('mapped arguments обновляет параметры при простой и составной записи', () => {
+test('mapped arguments updates parameters on simple and compound write', () => {
   assert.deepEqual(
     compare(
       'function f(a){arguments[0]=20;capture(a);capture(arguments[0]+=2);return a;}capture(f(10));',
@@ -270,7 +270,7 @@ test('mapped arguments обновляет параметры при просто
     [20, 22, 22],
   );
 });
-test('strict arguments не связан с параметром', () => {
+test('strict arguments is unmapped from parameter', () => {
   assert.deepEqual(
     compare(
       'function f(a){"use strict";arguments[0]+=2;capture(a);return arguments[0];}capture(f(10));',
@@ -278,12 +278,12 @@ test('strict arguments не связан с параметром', () => {
     [10, 12],
   );
 });
-test('повторные параметры сохраняют правильное отображение arguments', () => {
+test('duplicate parameters preserve correct arguments mapping', () => {
   compare(
     'function f(a,a){arguments[0]=30;capture(a);arguments[1]+=2;capture(a);}f(10,20);',
   );
 });
-test('readonly arguments index разрывает mapping', () => {
+test('readonly arguments index breaks mapping', () => {
   compare(
     'function f(a){lock(arguments);arguments[0]=20;a=30;capture(arguments[0]);capture(a);}f(10);',
     () => ({
@@ -293,7 +293,7 @@ test('readonly arguments index разрывает mapping', () => {
     }),
   );
 });
-test('записанная VM-функция вызывается как метод с правильным this', () => {
+test('written VM function is called as method with proper this', () => {
   assert.deepEqual(
     compare(
       'object.method=function(v){return this.x+v;};capture(object.method(5));',
@@ -302,7 +302,7 @@ test('записанная VM-функция вызывается как мет�
     [15],
   );
 });
-test('результат присваивания сохраняет идентичность объекта', () => {
+test('assignment result preserves object identity', () => {
   const value = {},
     object = {};
   let received;
@@ -318,7 +318,7 @@ test('результат присваивания сохраняет идент�
   assert.equal(received, value);
   assert.equal(object.x, value);
 });
-test('неподдерживаемые операторы и цели по-прежнему отклоняются', () => {
+test('unsupported operators and targets are still rejected', () => {
   for (const source of [
     'object.x **= 2;',
     'object.x ||= 2;',

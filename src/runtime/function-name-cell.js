@@ -1,9 +1,9 @@
 import { LexicalCell } from './lexical-cell.js';
 
 /**
- * Собственная неизменяемая привязка имени FunctionExpression.
- * В отличие от const, запись в нестрогом коде игнорируется.
- * Строгость относится к коду присваивания, а не к моменту создания ячейки.
+ * Immutable binding for a FunctionExpression's own name.
+ * Unlike const, assignment in sloppy mode is silently ignored.
+ * Strictness is determined by the assignment location, not cell creation time.
  */
 export class FunctionNameCell extends LexicalCell {
   constructor(name) {
@@ -15,15 +15,15 @@ export class FunctionNameCell extends LexicalCell {
       throw new TypeError('Assignment strict flag must be a boolean');
     }
 
-    // Не разрешаем обход TDZ даже при использовании модуля отдельно.
+    // Disallow bypassing TDZ even when using module independently.
     this.read();
 
     if (strict) {
-      // Базовая ячейка const выбрасывает штатный TypeError.
+      // Base const cell throws standard TypeError in strict mode.
       this.write(value);
     }
 
-    // Игнорируется только запись, но не вычисление RHS и не его результат.
+    // Only assignment is ignored, not RHS evaluation or its return value.
     return value;
   }
 }

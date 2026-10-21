@@ -21,12 +21,12 @@ import {
 } from '../src/packer/runtime-hardening.js';
 const exec = promisify(execFile),
   cli = fileURLToPath(new URL('../bin/jsvm.js', import.meta.url));
-const dispatcher = await readFile(
-  new URL('../src/runtime/execute-assembly.js', import.meta.url),
-  'utf8',
-);
 const table = await readFile(
   new URL('../src/assembly/instructions.js', import.meta.url),
+  'utf8',
+);
+const bytecodeDispatcher = await readFile(
+  new URL('../src/runtime/execute-bytecode.js', import.meta.url),
   'utf8',
 );
 function walk(root, fn) {
@@ -41,6 +41,8 @@ function walk(root, fn) {
     }
   }
 }
+import { OPCODE_NAMES } from '../src/bytecode/opcodes.js';
+
 function caseNames(source) {
   const result = new Set();
   walk(parseJavaScript(source, { sourceType: 'module' }), (n) => {
@@ -49,9 +51,30 @@ function caseNames(source) {
       n.discriminant.type === 'Identifier' &&
       n.discriminant.name === 'op'
     )
-      for (const c of n.cases) if (c.test) result.add(c.test.value);
+      for (const c of n.cases) {
+        if (c.test) {
+          const val = typeof c.test.value === 'number' ? (OPCODE_NAMES[c.test.value] ?? c.test.value) : c.test.value;
+          result.add(val);
+        }
+      }
   });
   return [...result];
+}
+function caseNumbers(source) {
+  const result = [];
+  walk(parseJavaScript(source, { sourceType: 'module' }), (n) => {
+    if (
+      n.type === 'SwitchStatement' &&
+      n.discriminant.type === 'Identifier' &&
+      n.discriminant.name === 'op'
+    )
+      for (const c of n.cases) {
+        if (c.test && typeof c.test.value === 'number') {
+          result.push(c.test.value);
+        }
+      }
+  });
+  return result;
 }
 function run(code, extras = {}) {
   const output = [];
@@ -103,8 +126,8 @@ for (const op of Object.keys(INSTRUCTIONS))
     'single-opcode specialization preserves its own case and removes every other handler: ' +
       op,
     () => {
-      const source = specializeRuntimeSource(dispatcher, {
-        filename: 'runtime/execute-assembly.js',
+      const source = specializeRuntimeSource(bytecodeDispatcher, {
+        filename: 'runtime/execute-bytecode.js',
         usedOpcodes: new Set([op]),
         maskErrors: true,
       });
@@ -112,13 +135,13 @@ for (const op of Object.keys(INSTRUCTIONS))
     },
   );
 test('grouped fallthrough cases retain common body when only an early member survives', () => {
-  const source = specializeRuntimeSource(dispatcher, {
-    filename: 'runtime/execute-assembly.js',
+  const source = specializeRuntimeSource(bytecodeDispatcher, {
+    filename: 'runtime/execute-bytecode.js',
     usedOpcodes: new Set(['js.add']),
     maskErrors: false,
   });
   assert.deepEqual(caseNames(source), ['js.add']);
-  assert.match(source, /binaryOperation\(op,/);
+  assert.match(source, /binaryOperation\('js\.add',/);
 });
 test('instruction contract retains only used opcodes and their original schemas', () => {
   for (const used of [
@@ -147,13 +170,14 @@ test('instruction contract retains only used opcodes and their original schemas'
 });
 test('disabling hardening leaves runtime source byte-identical', () => {
   assert.equal(
-    specializeRuntimeSource(dispatcher, {
-      filename: 'runtime/execute-assembly.js',
+    specializeRuntimeSource(bytecodeDispatcher, {
+      filename: 'runtime/execute-bytecode.js',
       usedOpcodes: new Set(['halt']),
       pruneOpcodes: false,
       maskErrors: false,
+      shuffleHandlers: false,
     }),
-    dispatcher,
+    bytecodeDispatcher,
   );
 });
 test('internal property allowlist excludes public and native ABI keys', () => {
@@ -495,3 +519,36 @@ test('full contract can coexist in one specialized bundle, including unreachable
   assert.equal(collectUsedOpcodes(text).size, Object.keys(INSTRUCTIONS).length);
   assert.deepEqual(run(await buildBrowserScript(text)), []);
 });
+
+test('specializeRuntimeSource shuffles bytecode opcode handlers when shuffleHandlers is true', () => {
+  const unshuffled = specializeRuntimeSource(bytecodeDispatcher, {
+    filename: 'runtime/execute-bytecode.js',
+    pruneOpcodes: false,
+    shuffleHandlers: false,
+  });
+  const shuffled1 = specializeRuntimeSource(bytecodeDispatcher, {
+    filename: 'runtime/execute-bytecode.js',
+    pruneOpcodes: false,
+    shuffleHandlers: true,
+  });
+  const shuffled2 = specializeRuntimeSource(bytecodeDispatcher, {
+    filename: 'runtime/execute-bytecode.js',
+    pruneOpcodes: false,
+    shuffleHandlers: true,
+  });
+  const orderUnshuffled = caseNumbers(unshuffled);
+  const order1 = caseNumbers(shuffled1);
+  const order2 = caseNumbers(shuffled2);
+  assert.equal(order1.length, orderUnshuffled.length);
+  assert.notDeepEqual(order1, orderUnshuffled);
+  assert.notDeepEqual(order1, order2);
+  assert.deepEqual(new Set(order1), new Set(orderUnshuffled));
+});
+
+test('buildBrowserScript produces functional VM with shuffled opcode handlers', async () => {
+  const code = await buildBrowserScript(compileToAssembly('capture(1 + 2 * 3);'), {
+    shuffleHandlers: true,
+  });
+  assert.deepEqual(run(code), [7]);
+});
+

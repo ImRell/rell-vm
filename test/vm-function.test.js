@@ -11,7 +11,7 @@ function make(options = {}) {
     ...options,
   });
 }
-test('сохраняет описание функции и подготовленное тело', () => {
+test('preserves function description and prepared body', () => {
   const fn = make({ name: 'f', parameters: ['x'], strict: true });
   assert.equal(fn.name, 'f');
   assert.deepEqual(fn.parameters, ['x']);
@@ -19,13 +19,13 @@ test('сохраняет описание функции и подготовле
   assert.equal(fn.program.instructions[0].op, 'js.const');
   assert.equal(typeof fn, 'function');
 });
-test('поддерживает анонимную функцию без параметров', () => {
+test('supports anonymous function without parameters', () => {
   const f = make();
   assert.equal(f.name, '');
   assert.equal(f.length, 0);
   assert.ok(f instanceof VMFunction);
 });
-test('копирует и защищает metadata, но допускает собственные свойства функции', () => {
+test('copies and protects metadata, but allows own function properties', () => {
   const parameters = ['x'],
     f = make({ parameters });
   parameters.push('y');
@@ -37,11 +37,11 @@ test('копирует и защищает metadata, но допускает с�
   assert.equal(f.extra, 7);
   assert.equal(f.prototype.constructor, f);
 });
-test('создание функции проверяет текст, но не исполняет его', () => {
+test('function creation validates text but does not execute it', () => {
   make({ source: 'js.global.get "notReadAtCreation"\nthrow' });
   assert.throws(() => make({ source: 'unknown' }), SyntaxError);
 });
-test('захватывает живую ячейку, а не снимок', () => {
+test('captures live binding rather than snapshot', () => {
   const e = new LexicalEnvironment(),
     cell = e.create(0, 'x', 'let');
   cell.initialize(1);
@@ -49,21 +49,21 @@ test('захватывает живую ячейку, а не снимок', () 
   cell.write(7);
   assert.equal(f.capturedEnvironment.getCell(0).read(), 7);
 });
-test('разные функции разделяют одно захваченное окружение', () => {
+test('distinct functions share single captured environment', () => {
   const e = new LexicalEnvironment(),
     a = make({ capturedEnvironment: e }),
     b = make({ capturedEnvironment: e });
   assert.equal(a.capturedEnvironment, b.capturedEnvironment);
   assert.notEqual(a, b);
 });
-test('повторные параметры разрешены только в нестрогом режиме', () => {
+test('duplicate parameters allowed only in sloppy mode', () => {
   make({ parameters: ['x', 'x'] });
   assert.throws(
     () => make({ parameters: ['x', 'x'], strict: true }),
     SyntaxError,
   );
 });
-test('проверяет типы полей описания функции', () => {
+test('validates field types in function description', () => {
   for (const options of [
     { name: 1 },
     { parameters: {} },

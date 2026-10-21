@@ -71,12 +71,13 @@ test('CLI --no-normalize explicitly supports raw BigInt', async (t) => {
     true,
   ]);
 });
-test('CLI default strict ES5 path rejects BigInt instead of silently bypassing normalization', async (t) => {
+test('CLI default path supports BigInt without error', async (t) => {
   const dir = await fixture(t, 'capture(6n);');
   const result = await run(['input file.js', '-o', 'output.js'], dir);
-  assert.equal(result.code, 1);
-  assert.match(result.stderr, /Normalization produced non-ES5 syntax/);
-  await assert.rejects(stat(join(dir, 'output.js')), { code: 'ENOENT' });
+  assert.equal(result.code, 0, result.stderr);
+  assert.deepEqual(evaluate(await readFile(join(dir, 'output.js'), 'utf8')), [
+    6n,
+  ]);
 });
 test('CLI --no-normalize keeps AssignmentPattern unsupported', async (t) => {
   const dir = await fixture(t, 'function f(x=7){}');

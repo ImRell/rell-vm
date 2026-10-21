@@ -1,4 +1,7 @@
 import { parseAssembly } from '../assembly/parse.js';
+import { assembleTextToBytecode } from '../bytecode/assemble.js';
+import { decodeBytecode } from '../bytecode/binary-serializer.js';
+import { openProgramEnvelope } from './open-program.js';
 import { LexicalEnvironment } from './lexical-environment.js';
 const records = new WeakMap();
 const invokers = new WeakMap();
@@ -13,23 +16,36 @@ export class VMFunction {
     name = '',
     parameters = [],
     strict = false,
+    bytecode,
     source,
     capturedEnvironment,
     exposeMetadata = true,
     decodeString,
   } = {}) {
+    const rawProgram = bytecode ?? source;
+    let parsedParams = parameters;
+    if (typeof parsedParams === 'string') {
+      try {
+        parsedParams = JSON.parse(parsedParams);
+      } catch {}
+    }
     if (
       (decodeString !== undefined && typeof decodeString !== 'function') ||
       typeof exposeMetadata !== 'boolean' ||
       typeof name !== 'string' ||
-      !Array.isArray(parameters) ||
+      !Array.isArray(parsedParams) ||
       typeof strict !== 'boolean' ||
-      typeof source !== 'string' ||
+      (!rawProgram ||
+        (typeof rawProgram !== 'string' &&
+          !(rawProgram instanceof String) &&
+          !(rawProgram instanceof Uint8Array) &&
+          !(rawProgram && rawProgram.code instanceof Uint8Array) &&
+          !(rawProgram && rawProgram.v === 1 && Array.isArray(rawProgram.k)))) ||
       !(capturedEnvironment instanceof LexicalEnvironment)
     )
       throw new TypeError('Invalid VM function');
     const seen = new Set();
-    for (const parameter of parameters) {
+    for (const parameter of parsedParams) {
       if (typeof parameter !== 'string' || parameter.length === 0)
         throw new TypeError('Invalid parameter');
       if (strict && seen.has(parameter))
@@ -38,11 +54,58 @@ export class VMFunction {
         );
       seen.add(parameter);
     }
+
+    let program = null;
+    const getProgram = () => {
+      if (program !== null) return program;
+      let raw = rawProgram;
+      if (raw && raw.v === 1 && Array.isArray(raw.k)) {
+        raw = openProgramEnvelope(raw);
+      }
+      if (raw instanceof Uint8Array) {
+        program = decodeBytecode(raw, { decodeString });
+      } else if (raw && raw.code instanceof Uint8Array) {
+        program = raw;
+      } else if (typeof raw === 'string' || raw instanceof String) {
+        program = assembleTextToBytecode(String(raw), {
+          decodeString,
+          fuseOpcodes: false,
+        });
+      }
+      if (decodeString && program && Array.isArray(program.constants)) {
+        if (Object.isFrozen(program.constants)) {
+          program.constants = [...program.constants];
+        }
+        for (let i = 0; i < program.constants.length; i++) {
+          const val = program.constants[i];
+          if (typeof val === 'string' && val.startsWith('@') && /^@[a-f0-9]{16}$/.test(val)) {
+            Object.defineProperty(program.constants, i, {
+              enumerable: true,
+              configurable: true,
+              get() {
+                const decoded = decodeString(val);
+                if (typeof decoded !== 'string') {
+                  throw new TypeError('Decoded string reference must be a string');
+                }
+                return decoded;
+              },
+            });
+          }
+        }
+      }
+      return program;
+    };
+
     const metadata = Object.freeze({
-      parameters: Object.freeze([...parameters]),
+      parameters: Object.freeze([...parsedParams]),
       strict,
-      source,
-      program: parseAssembly(source, { decodeString }),
+      source: rawProgram,
+      get bytecode() {
+        return getProgram();
+      },
+      get program() {
+        return getProgram();
+      },
       capturedEnvironment,
     });
     // This is an ordinary strict native function (ES module): native new,

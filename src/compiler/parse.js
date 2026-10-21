@@ -1,10 +1,10 @@
 import { parse } from '@babel/parser';
 
 /**
- * Разбирает исходный JavaScript в Babel AST.
+ * Parses JavaScript source into a Babel AST.
  *
- * Поддержка синтаксиса парсером не означает,
- * что этот синтаксис уже поддерживается компилятором.
+ * Parser support for a syntax does not imply
+ * that this syntax is supported by the compiler yet.
  *
  * @param {string} source
  * @param {{ filename?: string }} [options]

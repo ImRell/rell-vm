@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { compileToAssembly } from '../src/compiler/compile-assembly.js';
-import { executeAssembly } from '../src/runtime/execute-assembly.js';
+import { executeAssembly } from './es5-test-helpers.js';
 import { parseAssembly } from '../src/assembly/parse.js';
 
 function evaluate(source) {
@@ -13,17 +13,17 @@ function evaluate(source) {
     maxSteps: 100000,
   });
 }
-test('компилятор возвращает текст инструкций, а не объект байткода', () => {
-  const text = compileToAssembly('42;');
-  assert.equal(typeof text, 'string');
-  assert.match(text, /js\.const 42/);
-  assert.equal(parseAssembly(text).instructions.length, 3);
+test('compiler returns bytecode object', () => {
+  const prog = compileToAssembly('42;');
+  assert.ok(prog.code instanceof Uint8Array);
+  assert.ok(Array.isArray(prog.constants));
+  assert.equal(prog.constants[0], 42);
   assert.throws(
     () => executeAssembly({ code: [1, 2, 3], constants: [] }),
     TypeError,
   );
 });
-test('компилирует литералы, арифметику и сравнения', () => {
+test('compiles literals, arithmetic, and comparisons', () => {
   for (const [source, value] of [
     ['2+3*4;', 14],
     ['"a"+"b";', 'ab'],
@@ -33,10 +33,10 @@ test('компилирует литералы, арифметику и срав�
   ])
     assert.equal(evaluate(source), value);
 });
-test('компилирует переменные, присваивания и затенение', () => {
+test('compiles variables, assignments, and shadowing', () => {
   assert.equal(evaluate('var x=10;{let x=20;x++;}x+=2;x;'), 12);
 });
-test('сохраняет TDZ, в том числе при затенении', () => {
+test('preserves TDZ, including in shadowed scopes', () => {
   for (const source of ['x;let x=42;', 'let x=10;{x;let x=20;}'])
     assert.throws(
       () =>
@@ -44,7 +44,7 @@ test('сохраняет TDZ, в том числе при затенении', (
       ReferenceError,
     );
 });
-test('проверяет const во время исполнения и сохраняет порядок ошибок', () => {
+test('checks const at runtime and preserves error order', () => {
   assert.throws(
     () => executeAssembly(compileToAssembly('const x=10;x=20;')),
     TypeError,
@@ -58,17 +58,17 @@ test('проверяет const во время исполнения и сохр�
   );
   assert.equal(evaluate('const x=10;if(false){x=20;}x;'), 10);
 });
-test('сохраняет короткое замыкание и выбор веток', () => {
+test('preserves short-circuiting and branch selection', () => {
   assert.equal(evaluate('false&&(1n+1);'), false);
   assert.equal(evaluate('true||(1n+1);'), true);
   assert.equal(evaluate('true?42:(1n+1);'), 42);
 });
-test('компилирует while/for/do и управление ими в именованные переходы', () => {
+test('compiles while/for/do loops and control flow into branches', () => {
   const text = compileToAssembly(
     'var n=0;for(var i=0;i<3;i++){if(i===1)continue;n+=i;}do{n++;}while(n<4);while(true){break;}n;',
   );
-  assert.match(text, /label L[0-9]+/);
-  assert.match(text, /jump_if_false L[0-9]+/);
+  assert.match(String(text), /label L[0-9]+/);
+  assert.match(String(text), /jump_if_false L[0-9]+/);
   assert.equal(
     evaluate(
       'var n=0;for(var i=0;i<3;i++){if(i===1)continue;n+=i;}do{n++;}while(n<4);while(true){break;}n;',
@@ -76,7 +76,7 @@ test('компилирует while/for/do и управление ими в им
     4,
   );
 });
-test('неподдерживаемый синтаксис не пропускается', () => {
+test('unsupported syntax is rejected', () => {
   for (const source of [
     'x => x;',
     'with({}){}',
@@ -85,16 +85,16 @@ test('неподдерживаемый синтаксис не пропуска�
   ])
     assert.throws(() => compileToAssembly(source), SyntaxError);
 });
-test('ошибки компиляции сохраняют имя файла и позицию', () => {
+test('compilation errors preserve filename and position', () => {
   assert.throws(
     () => compileToAssembly('\n  x => x;', { filename: 'sample.js' }),
     /sample\.js:2:3: Unsupported expression: ArrowFunctionExpression/,
   );
 });
-test('компиляция генерирует инструкции, не выполняя выражения', () => {
+test('compilation emits instructions without evaluating expressions', () => {
   const text = compileToAssembly(
     'for(init();condition();update()){body();}do{other();}while(check());',
   );
-  assert.equal(typeof text, 'string');
+  assert.ok(text.code instanceof Uint8Array);
   assert.throws(() => executeAssembly(compileToAssembly('1n+1;')), TypeError);
 });

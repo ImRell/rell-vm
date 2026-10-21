@@ -14,26 +14,26 @@ function keys(value, onKey = () => {}) {
     onKey(next.value);
   }
 }
-test('перечисляет собственные и унаследованные строковые ключи', () => {
+test('enumerates own and inherited string keys', () => {
   const object = Object.assign(Object.create({ inherited: 1 }), { a: 1, b: 2 });
   assert.deepEqual(keys(object), ['a', 'b', 'inherited']);
 });
-test('не выдаёт скрытые свойства и символы', () => {
+test('does not yield non-enumerable properties and symbols', () => {
   const object = { a: 1, [Symbol('s')]: 2 };
   Object.defineProperty(object, 'hidden', { value: 3 });
   assert.deepEqual(keys(object), ['a']);
 });
-test('собственное неперечисляемое свойство затеняет перечисляемое родительское', () => {
+test('own non-enumerable property shadows enumerable prototype property', () => {
   const object = Object.create({ hidden: 1, visible: 2 });
   Object.defineProperty(object, 'hidden', { value: 3 });
   assert.deepEqual(keys(object), ['visible']);
 });
-test('одинаковые имена разных прототипов выдаются один раз', () => {
+test('identical names across prototypes are yielded once', () => {
   const root = { same: 1, root: 1 };
   const object = Object.assign(Object.create(root), { same: 2, own: 2 });
   assert.deepEqual(keys(object), ['same', 'own', 'root']);
 });
-test('перебор ключей не вызывает геттеры значений', () => {
+test('key enumeration does not invoke value getters', () => {
   const object = Object.create({
     get inherited() {
       throw Error('read');
@@ -47,24 +47,24 @@ test('перебор ключей не вызывает геттеры знач�
   });
   assert.deepEqual(keys(object), ['own', 'inherited']);
 });
-test('null и undefined дают пустой перебор', () => {
+test('null and undefined yield empty enumeration', () => {
   assert.deepEqual(keys(null), []);
   assert.deepEqual(keys(undefined), []);
 });
-test('примитивы следуют правилам native for-in', () => {
+test('primitives follow native for-in rules', () => {
   assert.deepEqual(keys('abc'), ['0', '1', '2']);
   for (const value of [0, 7, false, true, 1n, Symbol('s')])
     assert.deepEqual(keys(value), []);
 });
-test('массив пропускает дыры и length, но включает дополнительные свойства', () => {
+test('array skips holes and length, but includes additional properties', () => {
   const value = [, 'one', , 'three'];
   value.extra = 5;
   assert.deepEqual(keys(value), ['1', '3', 'extra']);
 });
-test('ключи с целочисленными именами используют порядок движка', () => {
+test('integer-indexed keys use engine order', () => {
   assert.deepEqual(keys({ z: 1, 8: 1, 2: 1, a: 1 }), ['2', '8', 'z', 'a']);
 });
-test('удалённый ещё не посещённый ключ пропускается', () => {
+test('deleted yet unvisited key is skipped', () => {
   const value = { a: 1, b: 2, c: 3 };
   assert.deepEqual(
     keys(value, (key) => {
@@ -73,7 +73,7 @@ test('удалённый ещё не посещённый ключ пропус�
     ['a', 'c'],
   );
 });
-test('изменения прототипа и enumerable совпадают с native for-in', () => {
+test('prototype and enumerable mutations match native for-in', () => {
   function run(native) {
     const prototype = { p: 1, q: 2 },
       object = Object.assign(Object.create(prototype), { a: 1, b: 2 });
@@ -95,7 +95,7 @@ test('изменения прототипа и enumerable совпадают с 
   }
   assert.deepEqual(run(false), run(true));
 });
-test('Symbol.iterator не читается и не используется', () => {
+test('Symbol.iterator is not accessed or used', () => {
   const object = {
     a: 1,
     get [Symbol.iterator]() {
@@ -104,7 +104,7 @@ test('Symbol.iterator не читается и не используется', (
   };
   assert.deepEqual(keys(object), ['a']);
 });
-test('создание ленивое, Proxy ловушки выполняются при next', () => {
+test('creation is lazy, Proxy traps execute on next', () => {
   const events = [],
     object = new Proxy(
       { a: 1 },
@@ -120,7 +120,7 @@ test('создание ленивое, Proxy ловушки выполняютс
   assert.equal(nextForInIterator(token).value, 'a');
   assert.deepEqual(events, ['keys']);
 });
-test('исключение Proxy сохраняет идентичность', () => {
+test('Proxy exception preserves identity', () => {
   const error = Error('ownKeys');
   const token = createForInIterator(
     new Proxy(
@@ -137,7 +137,7 @@ test('исключение Proxy сохраняет идентичность', (
     (e) => e === error,
   );
 });
-test('токен непрозрачный, состояния независимы, завершение стабильно', () => {
+test('token is opaque, states are independent, completion is stable', () => {
   const first = createForInIterator({ a: 1, b: 2 }),
     second = createForInIterator({ c: 3 });
   assert.equal(Object.isFrozen(first), true);
@@ -151,7 +151,7 @@ test('токен непрозрачный, состояния независим
       done: true,
     });
 });
-test('отклоняет поддельное состояние вместо вызова чужого next', () => {
+test('rejects forged state instead of invoking foreign next', () => {
   for (const value of [
     null,
     undefined,

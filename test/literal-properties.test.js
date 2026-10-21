@@ -7,7 +7,7 @@ import {
   setLiteralPrototype,
 } from '../src/runtime/literal-properties.js';
 
-test('пустой массив имеет Array.prototype и writable length', () => {
+test('empty array has Array.prototype and writable length', () => {
   const array = createArrayLiteral(0);
   assert.ok(Array.isArray(array));
   assert.equal(Object.getPrototypeOf(array), Array.prototype);
@@ -18,18 +18,18 @@ test('пустой массив имеет Array.prototype и writable length', 
     configurable: false,
   });
 });
-test('создание длины сохраняет дырки без indexed properties', () => {
+test('setting length preserves holes without indexed properties', () => {
   const array = createArrayLiteral(3);
   assert.equal(array.length, 3);
   assert.deepEqual(Object.keys(array), []);
   assert.equal(Object.hasOwn(array, 0), false);
 });
-test('длина uint32 проверяется без выделения элементов', () => {
+test('uint32 length is validated without allocating elements', () => {
   assert.equal(createArrayLiteral(0xffffffff).length, 0xffffffff);
   for (const value of [-1, 1.5, Infinity, 0x100000000, '3', null])
     assert.throws(() => createArrayLiteral(value), RangeError);
 });
-test('data definition создаёт обычное собственное свойство', () => {
+test('data definition creates standard own property', () => {
   const object = {},
     value = {};
   assert.equal(defineLiteralData(object, 'x', value), object);
@@ -40,7 +40,7 @@ test('data definition создаёт обычное собственное св�
     configurable: true,
   });
 });
-test('data definition не вызывает унаследованный setter', () => {
+test('data definition does not invoke inherited setter', () => {
   let writes = 0;
   const object = Object.create({
     set x(value) {
@@ -51,7 +51,7 @@ test('data definition не вызывает унаследованный setter'
   assert.equal(writes, 0);
   assert.equal(object.x, 42);
 });
-test('data definition заменяет accessor без вызова', () => {
+test('data definition replaces accessor without invocation', () => {
   const object = {
     get x() {
       assert.fail('getter executed');
@@ -60,7 +60,7 @@ test('data definition заменяет accessor без вызова', () => {
   defineLiteralData(object, 'x', 42);
   assert.equal(object.x, 42);
 });
-test('__proto__ как data key безопасно создаёт own property', () => {
+test('__proto__ as data key safely creates own property', () => {
   const object = {},
     value = {};
   defineLiteralData(object, '__proto__', value);
@@ -70,7 +70,7 @@ test('__proto__ как data key безопасно создаёт own property',
     value,
   );
 });
-test('getter и setter объединяются в один accessor descriptor', () => {
+test('getter and setter combine into single accessor descriptor', () => {
   const object = {};
   let value = 1;
   function get() {
@@ -90,7 +90,7 @@ test('getter и setter объединяются в один accessor descriptor'
   object.x = 42;
   assert.equal(object.x, 42);
 });
-test('новый getter сохраняет setter, data-property сбрасывает пару', () => {
+test('new getter preserves setter, data property resets pair', () => {
   const object = {};
   function set(value) {}
   defineLiteralAccessor(object, 'x', set, 'set');
@@ -102,7 +102,7 @@ test('новый getter сохраняет setter, data-property сбрасыв�
   assert.equal(Object.getOwnPropertyDescriptor(object, 'x').set, undefined);
   assert.equal(object.x, 4);
 });
-test('пара accessor берётся только из own descriptor', () => {
+test('accessor pair is taken only from own descriptor', () => {
   const proto = {
     set x(value) {
       assert.fail('inherited setter');
@@ -112,7 +112,7 @@ test('пара accessor берётся только из own descriptor', () => 
   defineLiteralAccessor(object, 'x', () => 1, 'get');
   assert.equal(Object.getOwnPropertyDescriptor(object, 'x').set, undefined);
 });
-test('ключ accessor преобразуется ровно один раз', () => {
+test('accessor key is converted exactly once', () => {
   let conversions = 0;
   const key = {
     [Symbol.toPrimitive]() {
@@ -125,21 +125,21 @@ test('ключ accessor преобразуется ровно один раз', 
   assert.equal(conversions, 1);
   assert.equal(object.x, 42);
 });
-test('символьные ключи поддерживают data и accessor', () => {
+test('symbol keys support data and accessor', () => {
   const key = Symbol(),
     object = {};
   defineLiteralData(object, key, 1);
   defineLiteralAccessor(object, key, () => 2, 'get');
   assert.equal(object[key], 2);
 });
-test('accessor проверяет callable и kind', () => {
+test('accessor validates callable and kind', () => {
   assert.throws(() => defineLiteralAccessor({}, 'x', {}, 'get'), TypeError);
   assert.throws(
     () => defineLiteralAccessor({}, 'x', () => 1, 'other'),
     TypeError,
   );
 });
-test('prototype literal setter принимает null/объекты и игнорирует примитивы', () => {
+test('prototype literal setter accepts null/objects and ignores primitives', () => {
   const object = {},
     proto = { x: 42 };
   assert.equal(setLiteralPrototype(object, proto), object);

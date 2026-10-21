@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import { compileToAssembly } from '../src/compiler/compile-assembly.js';
 import { normalizeSource } from '../src/compiler/normalize-source.js';
-import { executeAssembly } from '../src/runtime/execute-assembly.js';
+import { executeAssembly } from './es5-test-helpers.js';
 
 function evaluateScript(source, environment = Object.create(null)) {
   const assembly = compileToAssembly(source);
@@ -23,7 +23,7 @@ function evaluateScript(source, environment = Object.create(null)) {
   );
 }
 
-test('var доступен до объявления со значением undefined', () => {
+test('var is accessible before declaration with undefined value', () => {
   const values = [];
 
   evaluateScript(`
@@ -40,14 +40,14 @@ test('var доступен до объявления со значением und
   assert.deepEqual(values, [undefined, 42]);
 });
 
-test('var без инициализатора содержит undefined', () => {
+test('var without initializer holds undefined', () => {
   assert.equal(
     evaluateScript('var value; value;'),
     undefined,
   );
 });
 
-test('var из недостижимой ветки всё равно объявлен', () => {
+test('var in unreachable branch is still declared', () => {
   assert.equal(
     evaluateScript(`
       if (false) {
@@ -60,7 +60,7 @@ test('var из недостижимой ветки всё равно объяв�
   );
 });
 
-test('повторное объявление без инициализатора не сбрасывает значение', () => {
+test('duplicate declaration without initializer does not reset value', () => {
   assert.equal(
     evaluateScript(`
       var value = 42;
@@ -72,7 +72,7 @@ test('повторное объявление без инициализатор�
   );
 });
 
-test('присваивание до объявления использует поднятую переменную', () => {
+test('assignment before declaration uses hoisted variable', () => {
   assert.equal(
     evaluateScript(`
       value = 10;
@@ -83,7 +83,7 @@ test('присваивание до объявления использует п
   );
 });
 
-test('var внутри блока принадлежит области скрипта', () => {
+test('var inside block belongs to script scope', () => {
   assert.equal(
     evaluateScript(`
       {
@@ -100,7 +100,7 @@ test('var внутри блока принадлежит области скри
   );
 });
 
-test('поднятый var затеняет внешнее имя с начала скрипта', () => {
+test('hoisted var shadows external name from start of script', () => {
   assert.equal(
     evaluateScript(`
       var snapshot = value;
@@ -113,7 +113,7 @@ test('поднятый var затеняет внешнее имя с начал�
   );
 });
 
-test('блочный let может затенять внешний var', () => {
+test('block let can shadow outer var', () => {
   assert.equal(
     evaluateScript(`
       var value = 10;
@@ -129,7 +129,7 @@ test('блочный let может затенять внешний var', () => 
   );
 });
 
-test('инициализаторы var выполняются последовательно на своих местах', () => {
+test('var initializers execute sequentially in place', () => {
   assert.equal(
     evaluateScript(`
       var first = 10, second = first + 5;
@@ -140,7 +140,7 @@ test('инициализаторы var выполняются последова
   );
 });
 
-test('инициализатор в пропущенной ветке не вызывается', () => {
+test('initializer in skipped branch is not called', () => {
   let calls = 0;
 
   assert.equal(
@@ -162,7 +162,7 @@ test('инициализатор в пропущенной ветке не вы�
   assert.equal(calls, 0);
 });
 
-test('инициализатор выполняется при каждом достижении объявления', () => {
+test('initializer executes each time declaration is reached', () => {
   assert.equal(
     evaluateScript(`
       var index = 0;
@@ -180,7 +180,7 @@ test('инициализатор выполняется при каждом до
   );
 });
 
-test('исполняет простой результат нормализации Babel в ES5', () => {
+test('executes simple Babel normalization output in ES5', () => {
   const normalized = normalizeSource(`
     const value = 10;
     let result = value + 2;

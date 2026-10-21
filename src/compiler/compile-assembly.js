@@ -1,72 +1,34 @@
-import { AssemblyBuilder } from './assembly-builder.js';
+import { BytecodeBuilder } from '../bytecode/bytecode-builder.js';
 import { LexicalScope } from './scope.js';
 import { parseSource } from './parse.js';
 import { collectVarNames } from './collect-var-names.js';
-
-const BINARY_OPERATORS = new Map([
-  ['+', 'js.add'],
-  ['-', 'js.sub'],
-  ['*', 'js.mul'],
-  ['/', 'js.div'],
-  ['%', 'js.rem'],
-  ['===', 'js.strict_eq'],
-  ['!==', 'js.strict_ne'],
-  ['==', 'js.eq'],
-  ['!=', 'js.ne'],
-  ['&', 'js.bit_and'],
-  ['|', 'js.bit_or'],
-  ['^', 'js.bit_xor'],
-  ['<<', 'js.shl'],
-  ['>>', 'js.shr'],
-  ['>>>', 'js.ushr'],
-  ['in', 'js.in'],
-  ['instanceof', 'js.instanceof'],
-
-  ['<', 'js.lt'],
-  ['<=', 'js.le'],
-  ['>', 'js.gt'],
-  ['>=', 'js.ge'],
-]);
-
-const UNARY_OPERATORS = new Map([
-  ['+', 'js.pos'],
-  ['~', 'js.bit_not'],
-  ['typeof', 'js.typeof'],
-  ['void', 'js.void'],
-
-  ['-', 'js.neg'],
-  ['!', 'js.not'],
-]);
-
-const ASSIGNMENT_OPERATORS = new Map([
-  ['&=', 'js.bit_and'],
-  ['|=', 'js.bit_or'],
-  ['^=', 'js.bit_xor'],
-  ['<<=', 'js.shl'],
-  ['>>=', 'js.shr'],
-  ['>>>=', 'js.ushr'],
-
-  ['+=', 'js.add'],
-  ['-=', 'js.sub'],
-  ['*=', 'js.mul'],
-  ['/=', 'js.div'],
-  ['%=', 'js.rem'],
-]);
+import {
+  BINARY_OPERATORS,
+  UNARY_OPERATORS,
+  ASSIGNMENT_OPERATORS,
+} from './operators.js';
+import {
+  assertFunction,
+  assertDeclaration,
+  unsupported,
+} from './assertions.js';
 
 /**
- * Компилирует JavaScript непосредственно в текст инструкций.
+ * Compiles JavaScript source directly into bytecode instructions.
  *
  * @param {string} source
  * @param {{ filename?: string }} [options]
- * @returns {string}
+ * @returns {import('../bytecode/bytecode-builder.js').BytecodeProgram}
  */
 export function compileToAssembly(source, options = {}) {
   const ast = parseSource(source, options);
   return compileUnit(ast.program, new LexicalScope(), [], false, false);
 }
 
+export const compileToBytecode = compileToAssembly;
+
 function compileUnit(body, rootScope, parameters, isFunction, inheritedStrict) {
-  const builder = new AssemblyBuilder();
+  const builder = new BytecodeBuilder();
   let currentScope = rootScope;
   let currentLoop = null;
   let currentBreakable = null;
@@ -86,7 +48,7 @@ function compileUnit(body, rootScope, parameters, isFunction, inheritedStrict) {
     if (directive.value.value === 'use strict') strict = true;
   }
 
-  // Порядок уникальных параметров совпадает с createFunctionFrame().
+  // Order of unique parameters matches createFunctionFrame().
   const parameterNames = new Set(parameters);
   for (const name of parameters) rootScope.declareVar(name);
 
@@ -132,7 +94,7 @@ function compileUnit(body, rootScope, parameters, isFunction, inheritedStrict) {
     builder.emit('js.arguments.create', argumentsBinding.slot);
   }
 
-  // Параметры уже созданы runtime. var с тем же именем не сбрасывает их.
+  // Parameters are already created by the runtime. A var with the same name does not reset them.
   for (const binding of varBindings.values()) {
     if (parameterNames.has(binding.name) || binding === argumentsBinding)
       continue;
@@ -157,8 +119,8 @@ function compileUnit(body, rootScope, parameters, isFunction, inheritedStrict) {
     try {
       prepareScopeBindings(statements, scope);
 
-      // Все прямые lexical-объявления уже зарегистрированы и имеют TDZ.
-      // Поэтому поднятые функции видят и объявления ниже по исходнику.
+      // All direct lexical declarations are already registered and have TDZ.
+      // Therefore hoisted functions also see declarations lower down in the source.
       for (const declaration of declarations) {
         compileFunction(declaration);
         emitReference(
@@ -230,9 +192,8 @@ function compileUnit(body, rootScope, parameters, isFunction, inheritedStrict) {
         return;
 
       case 'BlockStatement': {
-        // Блок без собственных lexical-привязок не требует окружения.
-        // Это сохраняет прежний компактный код для пустых блоков
-        // и последовательностей обычных выражений.
+        // A block without its own lexical bindings does not require an environment frame.
+        // This preserves compact code for empty blocks and sequences of ordinary expressions.
         const needsEnvironment = node.body.some(
           (statement) =>
             statement.type === 'VariableDeclaration' &&
@@ -265,7 +226,7 @@ function compileUnit(body, rootScope, parameters, isFunction, inheritedStrict) {
         }
         if (node.argument === null) builder.emit('js.const', undefined);
         else compileExpression(node.argument);
-        // Возврат удаляет кадр целиком; блоки снимать отдельно не нужно.
+        // Return drops the entire frame; inner blocks do not need to be popped individually.
         builder.emit('return');
         return;
 
@@ -387,7 +348,7 @@ function compileUnit(body, rootScope, parameters, isFunction, inheritedStrict) {
     assertDeclaration(node);
 
     for (const declaration of node.declarations) {
-      // Повторное var без инициализатора не меняет значение.
+      // Repeated var without an initializer does not change the existing value.
       if (node.kind === 'var' && declaration.init === null) {
         continue;
       }
@@ -655,13 +616,13 @@ function compileUnit(body, rootScope, parameters, isFunction, inheritedStrict) {
       );
     }
 
-    // Выходим только из блоков между текущей точкой и телом цикла.
-    // Compile-time currentScope не меняем: далее может быть другой путь.
+    // Exit only from blocks between the current point and the loop body.
+    // Compile-time currentScope is unchanged: an alternate path may follow.
     let scope = currentScope;
     let scopesToLeave = 0;
     while (scope !== context.scope) {
       scopesToLeave++;
-      // scope здесь является блоком этого же compileUnit.
+      // scope here is a block within this compileUnit.
       scope = blockParents.get(scope);
       if (scope === undefined) {
         throw new Error(
@@ -916,8 +877,8 @@ function compileUnit(body, rootScope, parameters, isFunction, inheritedStrict) {
   }
 
   function compileCallExpression(node) {
-    // Прямой eval требует доступа к лексическому окружению JS.
-    // Вызов через Reflect.apply не воспроизводит эту семантику.
+    // Direct eval requires access to JS lexical environment.
+    // Calling via Reflect.apply does not reproduce this semantics.
     if (node.callee.type === 'Identifier' && node.callee.name === 'eval') {
       unsupported(node, 'Direct eval calls are not supported');
     }
@@ -929,14 +890,14 @@ function compileUnit(body, rootScope, parameters, isFunction, inheritedStrict) {
     }
 
     if (node.callee.type === 'MemberExpression') {
-      // После получения свойства стек содержит:
+      // After retrieving property, stack contains:
       // ..., object, function
       compileExpression(node.callee.object);
       builder.emit('dup');
       compilePropertyKey(node.callee);
       builder.emit('js.prop.get');
     } else {
-      // Обычный вызов не имеет объекта-получателя.
+      // Ordinary call has no receiver object.
       builder.emit('js.const', undefined);
       compileExpression(node.callee);
     }
@@ -1072,10 +1033,9 @@ function compileUnit(body, rootScope, parameters, isFunction, inheritedStrict) {
     let capturedScope = currentScope;
 
     if (namedExpression) {
-      // Runtime создаёт private-окружение между внешним окружением
-      // и корнем вызова. В нём только имя функции, всегда в слоте 0.
-      // Используем независимый allocator; переменные внешнего кадра
-      // от объявления private-имени не меняются.
+      // Runtime creates private environment between outer environment and call root.
+      // It contains only the function name, always at slot 0.
+      // Independent allocator is used; outer frame variables remain unchanged.
       capturedScope = currentScope.createFunctionChild();
       capturedScope.declareFunctionName(node.id.name);
     }
@@ -1133,39 +1093,3 @@ function compileUnit(body, rootScope, parameters, isFunction, inheritedStrict) {
   }
 }
 
-function assertFunction(node) {
-  if (node.async || node.generator) {
-    unsupported(node, 'Async and generator functions must be normalized first');
-  }
-  for (const parameter of node.params) {
-    if (parameter.type !== 'Identifier') {
-      unsupported(parameter, `Unsupported parameter: ${parameter.type}`);
-    }
-  }
-}
-
-function assertDeclaration(node) {
-  if (node.kind !== 'var' && node.kind !== 'let' && node.kind !== 'const') {
-    unsupported(node, `Unsupported variable kind: ${node.kind}`);
-  }
-
-  for (const declaration of node.declarations) {
-    if (declaration.id.type !== 'Identifier') {
-      unsupported(
-        declaration.id,
-        `Unsupported binding pattern: ${declaration.id.type}`,
-      );
-    }
-  }
-}
-
-function unsupported(node, message) {
-  if (!node.loc) {
-    throw new SyntaxError(message);
-  }
-
-  const filename = node.loc.filename ?? 'input.js';
-  const { line, column } = node.loc.start;
-
-  throw new SyntaxError(`${filename}:${line}:${column + 1}: ${message}`);
-}

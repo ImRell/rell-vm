@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import { readExternal } from '../src/runtime/read-external.js';
 
-test('читает значение из переданного окружения', () => {
+test('reads value from provided environment', () => {
   const consoleObject = {
     log() {},
   };
@@ -17,7 +17,7 @@ test('читает значение из переданного окружени
   assert.equal(readExternal('answer', environment), 42);
 });
 
-test('отсутствующее имя выбрасывает ReferenceError', () => {
+test('missing identifier throws ReferenceError', () => {
   assert.throws(
     () => readExternal('missing', Object.create(null)),
     {
@@ -27,7 +27,7 @@ test('отсутствующее имя выбрасывает ReferenceError', 
   );
 });
 
-test('существующее значение undefined не считается отсутствующим именем', () => {
+test('existing undefined value is not considered a missing identifier', () => {
   const environment = Object.create(null);
 
   environment.value = undefined;
@@ -38,7 +38,7 @@ test('существующее значение undefined не считаетс�
   );
 });
 
-test('читает актуальное значение при каждом обращении', () => {
+test('reads current value on each access', () => {
   const environment = { value: 10 };
 
   assert.equal(readExternal('value', environment), 10);
@@ -48,7 +48,7 @@ test('читает актуальное значение при каждом о�
   assert.equal(readExternal('value', environment), 20);
 });
 
-test('геттер вызывается при чтении с корректным получателем', () => {
+test('getter is invoked on read with correct receiver', () => {
   let reads = 0;
 
   const environment = {
@@ -69,7 +69,7 @@ test('геттер вызывается при чтении с корректн�
   assert.equal(reads, 1);
 });
 
-test('поддерживает свойства прототипа окружения', () => {
+test('supports prototype properties of environment', () => {
   const prototype = { inherited: 42 };
   const environment = Object.create(prototype);
 
@@ -79,7 +79,7 @@ test('поддерживает свойства прототипа окруже�
   );
 });
 
-test('не изменяет окружение и сохраняет исключения геттеров', () => {
+test('does not mutate environment and preserves getter exceptions', () => {
   const environment = Object.freeze({ value: 42 });
 
   assert.equal(readExternal('value', environment), 42);
@@ -99,7 +99,7 @@ test('не изменяет окружение и сохраняет исклю�
   );
 });
 
-test('проверяет аргументы и поддерживает объект-функцию', () => {
+test('validates arguments and supports function objects', () => {
   for (const name of ['', null, undefined, 42]) {
     assert.throws(
       () => readExternal(name, {}),

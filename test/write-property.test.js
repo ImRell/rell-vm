@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { writeProperty } from '../src/runtime/write-property.js';
 
-test('записывает собственные свойства и возвращает RHS', () => {
+test('writes own properties and returns RHS', () => {
   const object = {},
     value = {},
     key = Symbol();
@@ -12,7 +12,7 @@ test('записывает собственные свойства и возвр
   assert.equal(object[key], 42);
 });
 
-test('унаследованные writable-свойства создаются на получателе', () => {
+test('inherited writable properties are created on receiver', () => {
   const proto = { x: 1 },
     object = Object.create(proto);
   writeProperty(object, 'x', 2);
@@ -21,7 +21,7 @@ test('унаследованные writable-свойства создаются 
   assert.ok(Object.hasOwn(object, 'x'));
 });
 
-test('setter получает исходный объект и не определяет результат присваивания', () => {
+test('setter receives original object and does not determine assignment result', () => {
   let receiver, received;
   const object = Object.create({
     set x(value) {
@@ -35,7 +35,7 @@ test('setter получает исходный объект и не опреде
   assert.equal(received, 42);
 });
 
-test('readonly и nonextensible: sloppy игнорирует отказ, strict бросает', () => {
+test('readonly and nonextensible: sloppy ignores rejection, strict throws', () => {
   for (const object of [
     Object.freeze({ x: 1 }),
     Object.preventExtensions({}),
@@ -45,7 +45,7 @@ test('readonly и nonextensible: sloppy игнорирует отказ, strict 
   }
 });
 
-test('getter-only свойство не вызывает getter при записи', () => {
+test('getter-only property does not call getter on write', () => {
   let reads = 0;
   const object = {
     get x() {
@@ -58,7 +58,7 @@ test('getter-only свойство не вызывает getter при запи�
   assert.equal(reads, 0);
 });
 
-test('сохраняет исключение setter без подмены', () => {
+test('preserves setter exception without replacement', () => {
   const error = {};
   const object = {
     set x(value) {
@@ -71,7 +71,7 @@ test('сохраняет исключение setter без подмены', () 
   );
 });
 
-test('Proxy отказ учитывает strict, исключения и инварианты сохраняются', () => {
+test('Proxy rejection respects strict, exceptions and invariants are preserved', () => {
   const rejected = new Proxy(
     {},
     {
@@ -107,7 +107,7 @@ test('Proxy отказ учитывает strict, исключения и инв
   assert.throws(() => writeProperty(invariant, 'x', 2), TypeError);
 });
 
-test('примитивы не сохраняют новые свойства, strict запрещает запись', () => {
+test('primitives do not retain new properties, strict forbids write', () => {
   for (const base of [1, true, 'abc', 1n, Symbol()]) {
     assert.equal(writeProperty(base, 'missing', 42), 42);
     assert.throws(() => writeProperty(base, 'missing', 42, true), TypeError);
@@ -116,7 +116,7 @@ test('примитивы не сохраняют новые свойства, st
   assert.throws(() => writeProperty('abc', '0', 'x', true), TypeError);
 });
 
-test('setter прототипа примитива получает исходный примитив', () => {
+test('primitive prototype setter receives original primitive', () => {
   const key = Symbol();
   let receiver;
   Object.defineProperty(Number.prototype, key, {
@@ -133,7 +133,7 @@ test('setter прототипа примитива получает исходн
   }
 });
 
-test('null и undefined отклоняются до преобразования ключа', () => {
+test('null and undefined are rejected before key conversion', () => {
   let conversions = 0;
   const key = {
     [Symbol.toPrimitive]() {
@@ -146,7 +146,7 @@ test('null и undefined отклоняются до преобразования
   assert.equal(conversions, 0);
 });
 
-test('ключ преобразуется один раз, ошибка отказа не преобразует его повторно', () => {
+test('key is converted once, rejection error does not re-convert it', () => {
   let conversions = 0;
   const key = {
     [Symbol.toPrimitive]() {
@@ -175,10 +175,10 @@ test('ключ преобразуется один раз, ошибка отка
   );
 });
 
-test('ошибки array length не подавляются даже в sloppy режиме', () => {
+test('array length errors are not suppressed even in sloppy mode', () => {
   assert.throws(() => writeProperty([], 'length', -1), RangeError);
 });
 
-test('проверяет strict-флаг', () => {
+test('validates strict flag', () => {
   assert.throws(() => writeProperty({}, 'x', 1, 'false'), TypeError);
 });

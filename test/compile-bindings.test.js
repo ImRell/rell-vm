@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { compileToAssembly } from '../src/compiler/compile-assembly.js';
-import { executeAssembly } from '../src/runtime/execute-assembly.js';
+import { executeAssembly } from './es5-test-helpers.js';
 
 function evaluateScript(source) {
   const lines = compileToAssembly(source).trim().split('\n');
@@ -13,20 +13,20 @@ function evaluateScript(source) {
 const run = (source) =>
   executeAssembly(compileToAssembly(source), { environment: {} });
 
-test('компилирует объявление и чтение let', () =>
+test('compiles declaration and reading of let', () =>
   assert.equal(evaluateScript('let value=42;value;'), 42));
-test('компилирует объявление и чтение const', () =>
+test('compiles declaration and reading of const', () =>
   assert.equal(evaluateScript('const value=42;value;'), 42));
-test('let без инициализатора получает undefined', () =>
+test('let without initializer receives undefined', () =>
   assert.equal(evaluateScript('let value;value;'), undefined));
-test('инициализаторы вычисляются в порядке объявления', () =>
+test('initializers are evaluated in declaration order', () =>
   assert.equal(
     evaluateScript('let first=10,second=first+5;const result=second*2;result;'),
     30,
   ));
-test('чтение до объявления выбрасывает ReferenceError при исполнении', () =>
+test('reading before declaration throws ReferenceError at runtime', () =>
   assert.throws(() => run('value;let value=42;'), ReferenceError));
-test('переменная находится в TDZ внутри собственного инициализатора', () => {
+test('variable is in TDZ within its own initializer', () => {
   for (const source of [
     'let value=value;',
     'const value=value;',
@@ -34,29 +34,29 @@ test('переменная находится в TDZ внутри собстве
   ])
     assert.throws(() => run(source), ReferenceError);
 });
-test('внутреннее объявление затеняет внешнее с начала блока', () =>
+test('inner declaration shadows outer from the beginning of the block', () =>
   assert.throws(
     () => run('let value=10;{value;let value=20;}'),
     ReferenceError,
   ));
-test('вложенный блок видит внешние переменные', () =>
+test('nested block sees outer variables', () =>
   assert.equal(
     run('const value=42;{if(value===42){value+1;}else{1n+1;}}'),
     undefined,
   ));
-test('затенение не изменяет внешнюю переменную', () =>
+test('shadowing does not mutate outer variable', () =>
   assert.equal(
     evaluateScript(
       'let value=10;{const value=20;if(value===20){value;}else{1n+1;}}value;',
     ),
     10,
   ));
-test('объявления не видны за пределами своего блока', () => {
+test('declarations are not visible outside their block', () => {
   for (const source of [
     '{let hidden=42;}hidden;',
     '{let hidden=42;}{hidden;}',
   ]) {
-    // Неизвестные имена теперь допустимы как внешние: ошибка возникает в VM.
+    // Unknown names are now valid as external; error occurs in VM.
     const text = compileToAssembly(source);
     assert.throws(
       () => executeAssembly(text, { environment: {} }),
@@ -64,9 +64,9 @@ test('объявления не видны за пределами своего 
     );
   }
 });
-test('недостижимое чтение переменной в TDZ не выбрасывает исключение', () =>
+test('unreachable read of variable in TDZ does not throw', () =>
   assert.equal(run('if(false){value;}let value=42;'), undefined));
-test('var поддерживается, ненормализованная деструктуризация отклоняется', () => {
+test('var is supported, unnormalized destructuring is rejected', () => {
   assert.equal(evaluateScript('var value=42;value;'), 42);
   for (const source of [
     'let [value]=42;',
@@ -75,16 +75,16 @@ test('var поддерживается, ненормализованная де�
   ])
     assert.throws(() => compileToAssembly(source), SyntaxError);
 });
-test('простое присваивание изменяет let и возвращает значение', () => {
+test('simple assignment mutates let and returns value', () => {
   assert.equal(evaluateScript('let value=10;value=20;value;'), 20);
   assert.equal(evaluateScript('let value;value=42;'), 42);
 });
-test('поддерживает цепочки присваиваний', () =>
+test('supports chained assignments', () =>
   assert.equal(
     evaluateScript('let left;let right;left=right=7;left+right;'),
     14,
   ));
-test('составные арифметические присваивания возвращают новое значение', () => {
+test('compound arithmetic assignments return new value', () => {
   for (const [op, expected] of [
     ['+=', 13],
     ['-=', 7],
@@ -95,15 +95,15 @@ test('составные арифметические присваивания �
     assert.equal(evaluateScript(`let value=10;value ${op} 3;`), expected);
   assert.equal(evaluateScript('let value=10;value+=3;value;'), 13);
 });
-test('составное присваивание сохраняет JS-семантику значений', () => {
+test('compound assignment preserves JS value semantics', () => {
   assert.equal(evaluateScript('let value=1;value+="2";'), '12');
   assert.equal(evaluateScript('let value=2n;value*=3n;'), 6n);
 });
-test('составное присваивание читает старое значение до правой части', () => {
+test('compound assignment reads old value before right-hand side', () => {
   assert.equal(evaluateScript('let value=10;value+=(value=3);'), 13);
   assert.equal(evaluateScript('let value=10;value-=(value=3);'), 7);
 });
-test('присваивание изменяет ближайшее доступное объявление', () => {
+test('assignment modifies nearest accessible declaration', () => {
   assert.equal(evaluateScript('let value=10;{value=20;}value;'), 20);
   assert.equal(
     evaluateScript(
@@ -112,7 +112,7 @@ test('присваивание изменяет ближайшее доступ�
     10,
   );
 });
-test('присваивание проверяет TDZ при исполнении', () => {
+test('assignment checks TDZ at runtime', () => {
   for (const source of [
     'value=42;let value;',
     'value+=1;let value;',
@@ -120,7 +120,7 @@ test('присваивание проверяет TDZ при исполнени�
   ])
     assert.throws(() => run(source), ReferenceError);
 });
-test('присваивание в const выбрасывает ошибку только при выполнении', () => {
+test('assignment to const throws error only at runtime', () => {
   for (const source of ['const value=10;value=20;', 'const value=10;value+=5;'])
     assert.throws(() => run(source), {
       name: 'TypeError',
@@ -128,7 +128,7 @@ test('присваивание в const выбрасывает ошибку то
     });
   assert.equal(evaluateScript('const value=10;if(false){value=20;}value;'), 10);
 });
-test('порядок вычислений сохраняется при ошибках присваивания', () => {
+test('evaluation order is preserved on assignment errors', () => {
   assert.throws(() => run('const value=10;value=other;let other;'), {
     name: 'ReferenceError',
     message: "Cannot access 'other' before initialization",
@@ -138,7 +138,7 @@ test('порядок вычислений сохраняется при ошиб
     message: "Cannot access 'value' before initialization",
   });
 });
-test('отклоняет неподдерживаемые цели и операторы присваивания', () => {
+test('rejects unsupported assignment targets and operators', () => {
   const cases = [
     ['unknown=42;', /Assignment to unresolved identifier/],
     ['[value]=source;', /Unsupported assignment target: ArrayPattern/],
@@ -147,7 +147,7 @@ test('отклоняет неподдерживаемые цели и опера
   ];
   for (const [source, error] of cases)
     assert.throws(() => compileToAssembly(source), error);
-  // MemberExpression больше не является неподдерживаемой целью.
+  // MemberExpression is no longer an unsupported target.
   const object = {};
   executeAssembly(compileToAssembly('object.value=42;'), {
     environment: { object },

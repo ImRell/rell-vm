@@ -1,44 +1,44 @@
 /**
- * Версия собственного текстового формата.
- * Это не версия стандарта WebAssembly.
+ * Custom text assembly format version.
+ * This is not a WebAssembly standard version.
  */
 export const ASSEMBLY_VERSION = 1;
 
 /**
- * Типы аргументов:
+ * Operand types:
  *
- * literal     — примитивное значение:
- *               строка, число, boolean, null, undefined, BigInt.
+ * literal     — primitive value:
+ *               string, number, boolean, null, undefined, BigInt.
  *
- * slot        — неотрицательное безопасное целое число.
+ * slot        — non-negative safe integer.
  *
- * name        — непустая строка в двойных кавычках.
+ * name        — non-empty double-quoted string.
  *
- * bindingKind — ключевое слово let или const.
+ * bindingKind — keyword let or const.
  *
- * label       — имя метки: [A-Za-z_][A-Za-z0-9_]*.
+ * label       — label identifier: [A-Za-z_][A-Za-z0-9_]*.
  *
- * Строки используют JSON-экранирование.
- * Проверять аргументы будет парсер формата.
+ * Strings use JSON escape sequences.
+ * Arguments are validated by the format parser.
  */
 
 /**
- * Исполняемые инструкции.
+ * Executable instruction specifications.
  *
- * operands — типы аргументов в порядке записи.
- * pops     — минимальное число снимаемых значений.
- * pushes   — число помещаемых значений.
+ * operands — operand types in emission order.
+ * pops     — minimum number of popped values.
+ * pushes   — number of pushed values.
  *
  * flow:
- * next   — продолжение со следующей инструкции;
- * jump   — безусловный переход;
- * branch — условный переход;
- * return — завершение текущего вызова;
- * halt   — завершение программы;
- * throw  — исключительное завершение с исходным значением.
+ * next   — continue to the next instruction;
+ * jump   — unconditional branch;
+ * branch — conditional branch;
+ * return — return from current call;
+ * halt   — terminate program execution;
+ * throw  — abrupt completion with original value.
  *
- * DUP описан как pops: 1, pushes: 2:
- * это фиксирует необходимость значения на стеке.
+ * DUP is specified as pops: 1, pushes: 2:
+ * this requires an operand on the stack.
  */
 export const INSTRUCTIONS = Object.freeze({
   halt: define([], 0, 0, 'halt'),
@@ -124,7 +124,7 @@ export const INSTRUCTIONS = Object.freeze({
   'js.lex.set': define(['slot'], 1, 0),
   'js.lex.tee': define(['slot'], 1, 1),
 
-  // Именованное выражение создаёт отдельное окружение имени (слот 0).
+  // Named function expression creates a private name environment (slot 0).
   'js.function.named.create': define(
     ['text', 'parameters', 'boolean', 'text'],
     0,
@@ -158,8 +158,8 @@ export const INSTRUCTIONS = Object.freeze({
 });
 
 /**
- * Директивы обрабатываются загрузчиком,
- * но не становятся исполняемыми инструкциями.
+ * Directives are processed by the loader
+ * but do not become executable instructions.
  */
 export const DIRECTIVES = Object.freeze({
   label: Object.freeze({

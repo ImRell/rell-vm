@@ -4,7 +4,7 @@ import vm from 'node:vm';
 import { compileToAssembly } from '../src/compiler/compile-assembly.js';
 import { mangleAssemblyNames } from '../src/assembly/mangle-names.js';
 import { parseAssembly } from '../src/assembly/parse.js';
-import { executeAssembly } from '../src/runtime/execute-assembly.js';
+import { executeAssembly } from './es5-test-helpers.js';
 function execute(source, mangle = true, options = {}) {
   const values = [],
     environment = {

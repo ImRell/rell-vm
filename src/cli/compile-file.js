@@ -6,11 +6,11 @@ import { compileToAssembly } from '../compiler/compile-assembly.js';
 import { buildBrowserScript } from '../packer/build-browser-script.js';
 
 /**
- * Компилирует файл в самостоятельный браузерный скрипт.
+ * Compiles a file into a standalone browser script.
  *
- * По умолчанию нормализует ES6+ в ES5 перед генерацией assembly.
- * Не исполняет пользовательскую программу.
- * После успешной сборки перезаписывает существующий выходной файл.
+ * By default, normalizes ES6+ to ES5 before generating assembly/bytecode.
+ * Does not execute the user program.
+ * Overwrites the existing output file upon successful compilation.
  *
  * @param {{
  *   inputPath: string,
@@ -47,6 +47,7 @@ export async function compileFile({
   maskErrors = true,
   protectStrings = true,
   exposeFunctionMetadata = false,
+  shuffleHandlers = true,
 }) {
   assertPath(inputPath, 'Input');
   assertPath(outputPath, 'Output');
@@ -56,6 +57,7 @@ export async function compileFile({
     pruneOpcodes,
     maskErrors,
     protectStrings,
+    shuffleHandlers,
   }))
     if (typeof value !== 'boolean')
       throw new TypeError(name + ' must be a boolean');
@@ -118,14 +120,15 @@ export async function compileFile({
     maskErrors,
     protectStrings,
     exposeFunctionMetadata,
+    shuffleHandlers,
   });
 
-  // До успешного завершения сборки выходную директорию не создаём.
+  // Do not create output directory until compilation succeeds.
   await mkdir(dirname(absoluteOutputPath), {
     recursive: true,
   });
 
-  // Записываем только после успешной сборки; w создаёт или перезаписывает output.
+  // Write only after successful compilation; creates or overwrites output.
   await writeFile(absoluteOutputPath, output, {
     encoding: 'utf8',
     flag: 'w',

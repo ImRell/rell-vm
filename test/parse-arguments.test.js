@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import { HELP_TEXT, parseArguments } from '../src/cli/parse-arguments.js';
 
-test('разбирает входной файл и обязательный output', () => {
+test('parses input file and required output', () => {
   assert.deepEqual(parseArguments(['input.js', '--output', 'output.js']), {
     help: false,
     inputPath: 'input.js',
@@ -22,7 +22,7 @@ test('разбирает входной файл и обязательный out
   });
 });
 
-test('поддерживает короткую опцию и минификацию', () => {
+test('supports short option and minification', () => {
   assert.deepEqual(
     parseArguments(['--minify', '-o', 'output.js', 'input.js']),
     {
@@ -44,7 +44,7 @@ test('поддерживает короткую опцию и минификац
   );
 });
 
-test('сохраняет пути с пробелами и поддерживает output через равно', () => {
+test('preserves paths with spaces and supports output via equals', () => {
   assert.deepEqual(
     parseArguments(['source files/input.js', '--output=build files/output.js']),
     {
@@ -66,7 +66,7 @@ test('сохраняет пути с пробелами и поддержива�
   );
 });
 
-test('help не требует входного и выходного файла', () => {
+test('help does not require input and output file', () => {
   assert.deepEqual(parseArguments(['--help']), { help: true });
   assert.deepEqual(parseArguments(['-h']), { help: true });
 
@@ -74,7 +74,7 @@ test('help не требует входного и выходного файла
   assert.ok(HELP_TEXT.includes('--minify'));
 });
 
-test('требует ровно один непустой входной путь', () => {
+test('requires exactly one non-empty input path', () => {
   for (const args of [
     [],
     ['--output', 'output.js'],
@@ -92,7 +92,7 @@ test('требует ровно один непустой входной пут�
   );
 });
 
-test('требует непустой output и отклоняет неизвестные опции', () => {
+test('requires non-empty output and rejects unknown options', () => {
   for (const args of [
     ['input.js'],
     ['input.js', '--output='],
@@ -113,7 +113,7 @@ test('требует непустой output и отклоняет неизве�
   });
 });
 
-test('отклоняет повторение опций, включая короткую и длинную формы', () => {
+test('rejects duplicate options including short and long forms', () => {
   const cases = [
     ['input.js', '-o', 'first.js', '--output', 'second.js'],
     ['input.js', '-o', 'output.js', '--minify', '--minify'],
@@ -125,7 +125,7 @@ test('отклоняет повторение опций, включая кор�
   }
 });
 
-test('поддерживает входной путь после разделителя опций', () => {
+test('supports input path after option terminator', () => {
   assert.deepEqual(parseArguments(['-o', 'output.js', '--', '-input.js']), {
     help: false,
     inputPath: '-input.js',
@@ -144,7 +144,7 @@ test('поддерживает входной путь после раздели
   });
 });
 
-test('не изменяет аргументы и проверяет тип входа', () => {
+test('does not mutate arguments and validates input type', () => {
   const args = Object.freeze(['input.js', '-o', 'output.js']);
 
   assert.doesNotThrow(() => parseArguments(args));

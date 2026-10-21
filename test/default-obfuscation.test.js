@@ -11,7 +11,7 @@ import { buildBrowserScript } from '../src/packer/build-browser-script.js';
 import { compileFile } from '../src/cli/compile-file.js';
 import { parseArguments, HELP_TEXT } from '../src/cli/parse-arguments.js';
 import { compileToAssembly } from '../src/compiler/compile-assembly.js';
-import { executeAssembly } from '../src/runtime/execute-assembly.js';
+import { executeAssembly } from './es5-test-helpers.js';
 const exec = promisify(execFile),
   cli = fileURLToPath(new URL('../bin/jsvm.js', import.meta.url));
 const secret = 'UNIQUE_ENCRYPTED_LITERAL_9eb814';

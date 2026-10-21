@@ -30,7 +30,7 @@ async function runCli(args, cwd) {
       stderr: result.stderr,
     };
   } catch (error) {
-    // Ошибка запуска или таймаут — не обычный код завершения CLI.
+    // Process launch error or timeout is not a standard CLI exit code.
     if (typeof error.code !== 'number') {
       throw error;
     }
@@ -74,7 +74,7 @@ function runOutput(source) {
   });
 }
 
-test('CLI выводит справку и завершается с кодом 0', async () => {
+test('CLI outputs help and exits with code 0', async () => {
   const result = await runCli(['--help'], tmpdir());
 
   assert.equal(result.code, 0);
@@ -83,7 +83,7 @@ test('CLI выводит справку и завершается с кодом 
   assert.equal(result.stderr, '');
 });
 
-test('CLI сообщает об ошибках аргументов с кодом 2', async () => {
+test('CLI reports argument errors with code 2', async () => {
   for (const args of [[], ['--unknown']]) {
     const result = await runCli(args, tmpdir());
 
@@ -94,7 +94,7 @@ test('CLI сообщает об ошибках аргументов с кодо�
   }
 });
 
-test('CLI собирает файл из другой рабочей директории', async (t) => {
+test('CLI builds file from different working directory', async (t) => {
   const directory = await createFixture(
     t,
     `
@@ -128,7 +128,7 @@ test('CLI собирает файл из другой рабочей дирек�
   assert.doesNotThrow(() => runOutput(output));
 });
 
-test('CLI поддерживает минификацию и пути с пробелами', async (t) => {
+test('CLI supports minification and paths with spaces', async (t) => {
   const directory = await createFixture(t);
 
   await writeFile(
@@ -153,7 +153,7 @@ test('CLI поддерживает минификацию и пути с про�
   assert.doesNotThrow(() => runOutput(output));
 });
 
-test('CLI возвращает код 1 при отсутствии входного файла', async (t) => {
+test('CLI returns code 1 when input file is missing', async (t) => {
   const directory = await createFixture(t);
 
   const result = await runCli(['missing.js', '-o', 'output.js'], directory);
@@ -165,7 +165,7 @@ test('CLI возвращает код 1 при отсутствии входно
   await assert.rejects(stat(join(directory, 'output.js')), { code: 'ENOENT' });
 });
 
-test('CLI не создаёт output при неподдерживаемом синтаксисе', async (t) => {
+test('CLI creates no output on unsupported syntax', async (t) => {
   const directory = await createFixture(t, 'with ({}) { value; }');
 
   const result = await runCli(['input.js', '-o', 'output.js'], directory);
@@ -177,7 +177,7 @@ test('CLI не создаёт output при неподдерживаемом с�
   await assert.rejects(stat(join(directory, 'output.js')), { code: 'ENOENT' });
 });
 
-test('CLI перезаписывает существующий output и обрезает старое содержимое', async (t) => {
+test('CLI overwrites existing output and truncates old content', async (t) => {
   const directory = await createFixture(t, 'capture(42);');
   const outputPath = join(directory, 'output.js');
   await writeFile(outputPath, '// STALE_CLI_OUTPUT\n'.repeat(10000), 'utf8');
@@ -202,7 +202,7 @@ test('CLI перезаписывает существующий output и обр
   );
 });
 
-test('CLI сохраняет старый output при ошибке компиляции', async (t) => {
+test('CLI preserves old output on compilation error', async (t) => {
   const directory = await createFixture(t, 'with (object) {}');
   const outputPath = join(directory, 'output.js');
   await writeFile(outputPath, 'KEEP_EXISTING_OUTPUT', 'utf8');

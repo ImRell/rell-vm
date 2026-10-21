@@ -19,20 +19,23 @@ const SPECIAL_LITERALS = new Map([
 ]);
 
 /**
- * Разбирает текст программы в подготовленные инструкции.
+ * Parses assembly program source into prepared instructions.
  *
- * Аргументы переходов сохраняют имена меток.
- * Дополнительное поле target содержит индекс целевой инструкции.
+ * Jump arguments retain label names.
+ * The additional target field contains the index of the target instruction.
  *
- * Не выполняет программу и не проверяет высоту стека
- * на всех путях управления.
+ * Does not execute the program and does not check stack height
+ * across all control flow paths.
  *
  * @param {string} source
  * @param {{decodeString?: (reference: string) => string}} [options]
  * @returns {object}
  */
-export function parseAssembly(source, { decodeString } = {}) {
-  if (decodeString !== undefined && typeof decodeString !== 'function')
+export function parseAssembly(
+  source,
+  { decodeString, allowProtectedReferences = false } = {},
+) {
+  if (decodeString !== undefined && decodeString !== null && typeof decodeString !== 'function')
     throw new TypeError('decodeString must be a function');
   const lines = tokenizeAssembly(source);
   const instructions = [];
@@ -63,7 +66,7 @@ export function parseAssembly(source, { decodeString } = {}) {
         line,
         head.column,
         `${name} expects ${definition.operands.length} arguments, ` +
-          `received ${argumentTokens.length}`,
+        `received ${argumentTokens.length}`,
       );
     }
 
@@ -74,29 +77,58 @@ export function parseAssembly(source, { decodeString } = {}) {
       if (token.type === 'word' && token.value.startsWith('@')) {
         if (
           !/^@[a-f0-9]{16}$/.test(token.value) ||
-          !decodeString ||
+          (!decodeString && !allowProtectedReferences) ||
           !['literal', 'name', 'text', 'parameters'].includes(type)
         )
           fail(line, token.column, 'Invalid protected operand');
         protectedIndices.add(index);
-        Object.defineProperty(args, index, {
-          enumerable: true,
-          get() {
-            const value = decodeString(token.value);
-            if (typeof value !== 'string')
-              fail(
+
+        if (
+          decodeString &&
+          allowProtectedReferences &&
+          (type === 'parameters' ||
+            (index === 3 &&
+              (name === 'js.function.create' ||
+                name === 'js.function.named.create')))
+        ) {
+          const value = decodeString(token.value);
+          if (type === 'parameters') {
+            try {
+              args[index] = Object.freeze(JSON.parse(value));
+            } catch {
+              fail(line, token.column, 'Invalid parameters in protected operand');
+            }
+          } else {
+            args[index] = value;
+          }
+          return;
+        }
+
+        if (decodeString && !allowProtectedReferences) {
+          Object.defineProperty(args, index, {
+            enumerable: true,
+            get() {
+              const value = decodeString(token.value);
+              if (typeof value !== 'string')
+                fail(
+                  line,
+                  token.column,
+                  'Protected operand must decode to a string',
+                );
+              return parseOperand(
+                { type: 'string', value, column: token.column },
+                type,
                 line,
-                token.column,
-                'Protected operand must decode to a string',
               );
-            return parseOperand(
-              { type: 'string', value, column: token.column },
-              type,
-              line,
-            );
-          },
-        });
-      } else args[index] = parseOperand(token, type, line);
+            },
+          });
+          return;
+        }
+
+        args[index] = token.value;
+        return;
+      }
+      args[index] = parseOperand(token, type, line);
     });
 
     if (name === 'js.regexp.create' && protectedIndices.size === 0) {

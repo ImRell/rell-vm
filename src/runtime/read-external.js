@@ -1,8 +1,8 @@
 /**
- * Читает имя из явно переданного внешнего окружения.
+ * Reads an identifier from the explicit external environment.
  *
- * Значение читается в момент обращения, без предварительного
- * копирования свойств или вызова всех геттеров окружения.
+ * Value is read at access time without eagerly copying properties
+ * or prematurely invoking environment getters.
  *
  * @param {string} name
  * @param {object | Function} environment

@@ -153,11 +153,6 @@ test('Babel project configs are never loaded', async (t) => {
 for (const [name, source, pattern] of [
   ['syntax error', 'function f(x = ){}', /modern input\.js.*Unexpected token/s],
   ['VM unsupported with', 'with({}){}', /Unsupported statement: WithStatement/],
-  [
-    'strict ES5 rejects BigInt',
-    'capture(1n);',
-    /Normalization produced non-ES5 syntax/,
-  ],
 ])
   test('no output or build directory on ' + name, async (t) => {
     const paths = await fixture(t, source);
@@ -166,6 +161,11 @@ for (const [name, source, pattern] of [
       code: 'ENOENT',
     });
   });
+test('compileFile normalizes input with BigInt extension', async (t) => {
+  const paths = await fixture(t, 'capture(1n);');
+  await compileFile(paths);
+  assert.deepEqual(run(await readFile(paths.outputPath, 'utf8')), [1n]);
+});
 test('raw VM mode retains BigInt extension', async (t) => {
   const paths = await fixture(t, 'const n=6n;capture(n+1n===7n);');
   await compileFile({ ...paths, normalize: false });
